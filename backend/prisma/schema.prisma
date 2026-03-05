@@ -234,8 +234,14 @@ model Ticket {
   contactName          String?
   callOccurredAt       DateTime?
   callDurationMinutes  Int?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  reportedBy           String?         // Ko je prijavio (manual ticket)
+  putIAngazovanje      Json?          // Put i angažovanje – array of strings (manual ticket)
+  tokPrijave           String?        // Tok prijave (manual ticket)
+  zakljucak            String?        // Zaključak (manual ticket)
+  potpisOvlascenogLica  String?        // Potpis ovlašćenog lica (manual ticket)
+  ticketDate           DateTime?      // Datum na formi (manual ticket)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
   comments             TicketComment[]
   tasks                TicketTask[]
   ticketTags           TicketTag[]

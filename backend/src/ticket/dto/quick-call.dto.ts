@@ -1,12 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, MinLength, IsOptional, IsInt, Min, IsISO8601, IsIn } from 'class-validator';
+import { IsString, MinLength, IsOptional, IsInt, Min, IsISO8601, IsIn, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QuickCallDto {
-  @ApiProperty({ example: '+38165483215', description: 'Phone number (required)' })
+  @ApiPropertyOptional({ example: '+38165483215', description: 'Phone number (optional when Centrala is used)' })
+  @ValidateIf((o) => o.phone !== undefined && o.phone !== null && String(o.phone).trim() !== '')
   @IsString()
-  @MinLength(6)
-  phone!: string;
+  @MinLength(6, { message: 'Phone must be at least 6 characters when provided' })
+  phone?: string;
 
   @ApiPropertyOptional({ example: 'Petar Perić' })
   @IsOptional()

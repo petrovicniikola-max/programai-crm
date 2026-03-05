@@ -40,6 +40,27 @@ export class TicketController {
     return this.ticketService.quickCall(tenantId, dto, userId);
   }
 
+  @Get('quick-call/client-lookup')
+  @ApiOperation({ summary: 'Lookup client (contact + company) by phone, contact name, company name, companyId, pib or mb for Quick Call autofill' })
+  clientLookup(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('phone') phone: string | undefined,
+    @Query('contactName') contactName: string | undefined,
+    @Query('companyName') companyName: string | undefined,
+    @Query('companyId') companyId: string | undefined,
+    @Query('pib') pib: string | undefined,
+    @Query('mb') mb: string | undefined,
+  ) {
+    return this.ticketService.lookupClientForQuickCall(tenantId, {
+      phone: phone?.trim(),
+      contactName: contactName?.trim(),
+      companyName: companyName?.trim(),
+      companyId: companyId?.trim(),
+      pib: pib?.trim(),
+      mb: mb?.trim(),
+    });
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create ticket' })
   create(

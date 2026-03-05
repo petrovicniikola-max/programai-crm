@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TicketStatus, TicketType } from '@prisma/client';
+import { Prisma, TicketStatus, TicketType } from '@prisma/client';
 import { normalisePhone } from '../common/util/phone.util';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -17,13 +17,17 @@ export interface QuickCallResult {
 export class TicketService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async nextKey(tenantId: string): Promise<string> {
-    const count = await this.prisma.ticket.count({ where: { tenantId } });
-    return `T-${String(count + 1).padStart(6, '0')}`;
+  /** prefix 'T' = manual Create Ticket, 'Q' = Quick call */
+  private async nextKey(tenantId: string, prefix: 'T' | 'Q' = 'T', tx?: Prisma.TransactionClient): Promise<string> {
+    const prisma = tx ?? this.prisma;
+    const count = await prisma.ticket.count({
+      where: { tenantId, key: { startsWith: `${prefix}-` } },
+    });
+    return `${prefix}-${String(count + 1).padStart(6, '0')}`;
   }
 
   async create(tenantId: string, dto: CreateTicketDto, assigneeId?: string) {
-    const key = dto.key ?? (await this.nextKey(tenantId));
+    const key = dto.key ?? (await this.nextKey(tenantId, 'T'));
     const existing = await this.prisma.ticket.findUnique({
       where: { tenantId_key: { tenantId, key } },
     });
@@ -33,14 +37,21 @@ export class TicketService {
         tenantId,
         key,
         title: dto.title,
+        description: dto.description ?? undefined,
         status: dto.status ?? 'OPEN',
         type: dto.type ?? 'OTHER',
         companyId: dto.companyId ?? undefined,
         contactId: dto.contactId ?? undefined,
         assigneeId: assigneeId ?? dto.assigneeId ?? undefined,
-        createdByUserId: assigneeId ?? undefined,
+        createdByUserId: dto.createdByUserId ?? assigneeId ?? undefined,
         ...(dto.callOccurredAt !== undefined && { callOccurredAt: new Date(dto.callOccurredAt) }),
         ...(dto.callDurationMinutes !== undefined && { callDurationMinutes: dto.callDurationMinutes }),
+        reportedBy: dto.reportedBy ?? undefined,
+        putIAngazovanje: dto.putIAngazovanje ?? undefined,
+        tokPrijave: dto.tokPrijave ?? undefined,
+        zakljucak: dto.zakljucak ?? undefined,
+        potpisOvlascenogLica: dto.potpisOvlascenogLica ?? undefined,
+        ...(dto.ticketDate !== undefined && { ticketDate: new Date(dto.ticketDate) }),
       },
       include: { company: true, contact: true, assignee: true, createdBy: true },
     });
@@ -147,9 +158,124 @@ export class TicketService {
     return this.prisma.ticket.delete({ where: { id } });
   }
 
+  /** Lookup contact + company for Quick Call autofill. Tries phone, contactName, companyId, companyName, pib, mb. */
+  async lookupClientForQuickCall(
+    tenantId: string,
+    params: {
+      phone?: string;
+      contactName?: string;
+      companyName?: string;
+      companyId?: string;
+      pib?: string;
+      mb?: string;
+    },
+  ): Promise<{
+    contact?: { id: string; name: string; companyId: string | null; phones: { phoneRaw: string }[] };
+    company?: { id: string; name: string; pib: string | null; mb: string | null };
+  }> {
+    const { phone, contactName, companyName, companyId, pib, mb } = params;
+
+    if (phone) {
+      const phoneNorm = normalisePhone(phone);
+      if (phoneNorm) {
+        const cp = await this.prisma.contactPhone.findUnique({
+          where: { tenantId_phoneNormalised: { tenantId, phoneNormalised: phoneNorm } },
+          include: { contact: { include: { company: true, phones: { select: { phoneRaw: true } } } } },
+        });
+        if (cp?.contact) {
+          const c = cp.contact;
+          return {
+            contact: { id: c.id, name: c.name, companyId: c.companyId, phones: c.phones },
+            company: c.company ? { id: c.company.id, name: c.company.name, pib: c.company.pib, mb: c.company.mb } : undefined,
+          };
+        }
+      }
+    }
+
+    if (contactName) {
+      const contact = await this.prisma.contact.findFirst({
+        where: { tenantId, name: { contains: contactName, mode: 'insensitive' } },
+        include: { company: true, phones: { select: { phoneRaw: true } } },
+      });
+      if (contact) {
+        return {
+          contact: { id: contact.id, name: contact.name, companyId: contact.companyId, phones: contact.phones },
+          company: contact.company ? { id: contact.company.id, name: contact.company.name, pib: contact.company.pib, mb: contact.company.mb } : undefined,
+        };
+      }
+    }
+
+    if (companyId) {
+      const company = await this.prisma.company.findFirst({
+        where: { id: companyId, tenantId },
+      });
+      if (company) {
+        const contact = await this.prisma.contact.findFirst({
+          where: { tenantId, companyId: company.id },
+          include: { phones: { select: { phoneRaw: true } } },
+        });
+        return {
+          contact: contact ? { id: contact.id, name: contact.name, companyId: contact.companyId, phones: contact.phones } : undefined,
+          company: { id: company.id, name: company.name, pib: company.pib, mb: company.mb },
+        };
+      }
+    }
+
+    if (companyName) {
+      const company = await this.prisma.company.findFirst({
+        where: { tenantId, name: { contains: companyName, mode: 'insensitive' } },
+      });
+      if (company) {
+        const contact = await this.prisma.contact.findFirst({
+          where: { tenantId, companyId: company.id },
+          include: { phones: { select: { phoneRaw: true } } },
+        });
+        return {
+          contact: contact ? { id: contact.id, name: contact.name, companyId: contact.companyId, phones: contact.phones } : undefined,
+          company: { id: company.id, name: company.name, pib: company.pib, mb: company.mb },
+        };
+      }
+    }
+
+    if (pib) {
+      const company = await this.prisma.company.findFirst({
+        where: { tenantId, pib },
+      });
+      if (company) {
+        const contact = await this.prisma.contact.findFirst({
+          where: { tenantId, companyId: company.id },
+          include: { phones: { select: { phoneRaw: true } } },
+        });
+        return {
+          contact: contact ? { id: contact.id, name: contact.name, companyId: contact.companyId, phones: contact.phones } : undefined,
+          company: { id: company.id, name: company.name, pib: company.pib, mb: company.mb },
+        };
+      }
+    }
+
+    if (mb) {
+      const company = await this.prisma.company.findFirst({
+        where: { tenantId, mb },
+      });
+      if (company) {
+        const contact = await this.prisma.contact.findFirst({
+          where: { tenantId, companyId: company.id },
+          include: { phones: { select: { phoneRaw: true } } },
+        });
+        return {
+          contact: contact ? { id: contact.id, name: contact.name, companyId: contact.companyId, phones: contact.phones } : undefined,
+          company: { id: company.id, name: company.name, pib: company.pib, mb: company.mb },
+        };
+      }
+    }
+
+    return {};
+  }
+
   async quickCall(tenantId: string, dto: QuickCallDto, createdByUserId?: string): Promise<QuickCallResult> {
-    const phoneRaw = dto.phone.trim();
-    const phoneNormalised = normalisePhone(phoneRaw);
+    const phoneRaw = dto.phone?.trim() || null;
+    const phoneNormalised = phoneRaw ? normalisePhone(phoneRaw) : null;
+    const isCentrala = !phoneRaw;
 
     return this.prisma.$transaction(async (tx) => {
       let companyId: string | null = null;
@@ -187,45 +313,61 @@ export class TicketService {
       }
 
       let contact: { id: string; name: string; companyId: string | null; [k: string]: unknown };
+      const contactName = dto.contactName?.trim() || (isCentrala ? 'Centrala' : 'Nepoznat');
 
-      const existingPhone = await tx.contactPhone.findUnique({
-        where: { tenantId_phoneNormalised: { tenantId, phoneNormalised } },
-        include: { contact: { include: { company: true } } },
-      });
-
-      if (existingPhone) {
-        contact = existingPhone.contact;
-        if (companyId === null && contact.companyId) companyId = contact.companyId;
-        if (companyId !== null && contact.companyId !== companyId) {
-          contact = await tx.contact.update({
-            where: { id: contact.id },
-            data: { companyId },
+      if (isCentrala) {
+        const existing = companyId
+          ? await tx.contact.findFirst({
+              where: { tenantId, companyId, name: { contains: contactName, mode: 'insensitive' } },
+            })
+          : null;
+        if (existing) {
+          contact = existing;
+          if (companyId !== null && contact.companyId !== companyId) {
+            contact = await tx.contact.update({
+              where: { id: contact.id },
+              data: { companyId },
+            });
+          }
+        } else {
+          contact = await tx.contact.create({
+            data: { tenantId, companyId, name: contactName },
           });
         }
       } else {
-        const contactName = dto.contactName?.trim() || 'Nepoznat';
-        const newContact = await tx.contact.create({
-          data: {
-            tenantId,
-            companyId,
-            name: contactName,
-          },
+        const existingPhone = await tx.contactPhone.findUnique({
+          where: { tenantId_phoneNormalised: { tenantId, phoneNormalised: phoneNormalised! } },
+          include: { contact: { include: { company: true } } },
         });
-        await tx.contactPhone.create({
-          data: {
-            tenantId,
-            contactId: newContact.id,
-            phoneRaw,
-            phoneNormalised,
-            isPrimary: true,
-          },
-        });
-        contact = newContact;
+
+        if (existingPhone) {
+          contact = existingPhone.contact;
+          if (companyId === null && contact.companyId) companyId = contact.companyId;
+          if (companyId !== null && contact.companyId !== companyId) {
+            contact = await tx.contact.update({
+              where: { id: contact.id },
+              data: { companyId },
+            });
+          }
+        } else {
+          const newContact = await tx.contact.create({
+            data: { tenantId, companyId, name: contactName },
+          });
+          await tx.contactPhone.create({
+            data: {
+              tenantId,
+              contactId: newContact.id,
+              phoneRaw: phoneRaw!,
+              phoneNormalised: phoneNormalised!,
+              isPrimary: true,
+            },
+          });
+          contact = newContact;
+        }
       }
 
       const finalContactName = dto.contactName?.trim() || contact.name;
-      const keyCount = await tx.ticket.count({ where: { tenantId } });
-      const key = `T-${String(keyCount + 1).padStart(6, '0')}`;
+      const key = await this.nextKey(tenantId, 'Q', tx);
 
       const callOccurredAt = dto.callOccurredAt ? new Date(dto.callOccurredAt) : new Date();
       const callDurationMinutes = dto.callDurationMinutes ?? null;
@@ -239,13 +381,13 @@ export class TicketService {
           key,
           type: ticketType,
           status: 'OPEN',
-          title: `Poziv: ${finalContactName || phoneRaw}`,
+          title: `Poziv: ${finalContactName || phoneRaw || 'Centrala'}`,
           description: dto.summary ?? null,
           companyId,
           contactId: contact.id,
           assigneeId: dto.assigneeId ?? null,
           createdByUserId: createdByUserId ?? null,
-          phoneRaw,
+          phoneRaw: phoneRaw ?? null,
           contactName: finalContactName,
           callOccurredAt,
           callDurationMinutes,

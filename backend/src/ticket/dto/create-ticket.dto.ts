@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, MinLength, IsOptional, IsEnum, IsInt, Min, IsISO8601 } from 'class-validator';
+import { IsString, MinLength, IsOptional, IsEnum, IsInt, Min, IsISO8601, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TicketStatus, TicketType } from '@prisma/client';
 
@@ -14,7 +14,7 @@ export class CreateTicketDto {
   @MinLength(1)
   title!: string;
 
-  @ApiPropertyOptional({ description: 'Ticket description/summary' })
+  @ApiPropertyOptional({ description: 'Ticket description/summary (Opis prijave)' })
   @IsOptional()
   @IsString()
   description?: string;
@@ -44,6 +44,11 @@ export class CreateTicketDto {
   @IsString()
   assigneeId?: string;
 
+  @ApiPropertyOptional({ description: 'User who created the ticket (Ticket napravio); defaults to current user' })
+  @IsOptional()
+  @IsString()
+  createdByUserId?: string;
+
   @ApiPropertyOptional({ description: 'When the call occurred (ISO 8601)' })
   @IsOptional()
   @IsISO8601()
@@ -55,4 +60,35 @@ export class CreateTicketDto {
   @IsInt()
   @Min(0)
   callDurationMinutes?: number;
+
+  @ApiPropertyOptional({ description: 'Ko je prijavio (ime firme ili korisnika)' })
+  @IsOptional()
+  @IsString()
+  reportedBy?: string;
+
+  @ApiPropertyOptional({ description: 'Put i angažovanje – niz redova teksta' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  putIAngazovanje?: string[];
+
+  @ApiPropertyOptional({ description: 'Tok prijave' })
+  @IsOptional()
+  @IsString()
+  tokPrijave?: string;
+
+  @ApiPropertyOptional({ description: 'Zaključak' })
+  @IsOptional()
+  @IsString()
+  zakljucak?: string;
+
+  @ApiPropertyOptional({ description: 'Potpis ovlašćenog lica' })
+  @IsOptional()
+  @IsString()
+  potpisOvlascenogLica?: string;
+
+  @ApiPropertyOptional({ description: 'Datum na formi (ISO 8601)' })
+  @IsOptional()
+  @IsISO8601()
+  ticketDate?: string;
 }
