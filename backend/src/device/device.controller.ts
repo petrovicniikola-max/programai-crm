@@ -1,5 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  Res,
+  Header,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { DeviceService } from './device.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
@@ -16,6 +34,61 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @ApiBearerAuth()
 export class DeviceController {
   constructor(private readonly deviceService: DeviceService) {}
+
+  @Get('export')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @ApiOperation({ summary: 'Export devices as CSV' })
+  @ApiQuery({ name: 'format', required: false, enum: ['csv'] })
+  async exportCsv(
+    @CurrentUser('tenantId') tenantId: string,
+    @Res() res: Response,
+    @Query() query: ListDevicesQueryDto,
+  ) {
+    const csv = await this.deviceService.exportCsv(tenantId, query);
+    const filename = `devices_${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  }
+
+  @Get('import/template')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @ApiOperation({ summary: 'Download sample CSV for device import' })
+  getImportTemplate(@Res() res: Response) {
+    const csv = this.deviceService.getImportTemplateCsv();
+    res.setHeader('Content-Disposition', 'attachment; filename="devices_import_primer.csv"');
+    res.send(csv);
+  }
+
+  @Post('import')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({ summary: 'Import devices from CSV file' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
+  async importCsv(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @UploadedFile() file?: { buffer: Buffer },
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Fajl je obavezan (polje "file")');
+    return this.deviceService.importFromCsv(tenantId, userId, file.buffer);
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Device stats for dashboard' })
+  stats(@CurrentUser('tenantId') tenantId: string) {
+    return this.deviceService.stats(tenantId);
+  }
 
   @Post()
   @UseGuards(RolesGuard)

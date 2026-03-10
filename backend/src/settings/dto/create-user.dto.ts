@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsEmail, MinLength, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsEmail, MinLength, IsOptional, IsEnum, IsBoolean } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 export class CreateUserDto {
@@ -20,4 +20,9 @@ export class CreateUserDto {
   @ApiProperty({ enum: ['SUPER_ADMIN', 'SUPPORT', 'SALES'] })
   @IsEnum(UserRole)
   role!: UserRole;
+
+  @ApiPropertyOptional({ description: 'Receive licence expiry notification emails' })
+  @IsOptional()
+  @IsBoolean()
+  receiveLicenceExpiryEmails?: boolean;
 }

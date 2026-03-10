@@ -81,10 +81,19 @@ export class LicenceAlertsService {
           });
           if (existing) continue;
 
-          const contacts = await this.prisma.contact.findMany({
-            where: { companyId: lic.companyId, tenantId: tenant.id },
-          });
-          const recipientEmails = contacts.map((c) => c.email).filter((e): e is string => !!e?.trim());
+          const [contacts, users] = await Promise.all([
+            this.prisma.contact.findMany({
+              where: { companyId: lic.companyId, tenantId: tenant.id },
+            }),
+            this.prisma.user.findMany({
+              where: { tenantId: tenant.id, isActive: true, receiveLicenceExpiryEmails: true },
+            }),
+          ]);
+          const recipientEmails = [
+            ...contacts.map((c) => c.email),
+            ...users.map((u) => u.email),
+          ].filter((e): e is string => !!e?.trim());
+          if (recipientEmails.length === 0) continue;
           const fromName = settings?.emailFromName ?? null;
           const fromAddress = settings?.emailFromAddress ?? null;
           const emailSignature = settings?.emailSignature ?? null;

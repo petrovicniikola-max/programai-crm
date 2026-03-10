@@ -16,7 +16,15 @@ export class SettingsUsersService {
   async findAll(tenantId: string) {
     return this.prisma.user.findMany({
       where: { tenantId },
-      select: { id: true, email: true, displayName: true, role: true, isActive: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        receiveLicenceExpiryEmails: true,
+      },
       orderBy: { email: 'asc' },
     });
   }
@@ -35,8 +43,17 @@ export class SettingsUsersService {
         displayName: dto.displayName?.trim() || null,
         passwordHash,
         role: dto.role,
+        receiveLicenceExpiryEmails: dto.receiveLicenceExpiryEmails ?? false,
       },
-      select: { id: true, email: true, displayName: true, role: true, isActive: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        receiveLicenceExpiryEmails: true,
+      },
     });
     await this.audit.log({
       tenantId,
@@ -56,10 +73,20 @@ export class SettingsUsersService {
     if (dto.displayName !== undefined) data.displayName = dto.displayName;
     if (dto.role !== undefined) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.receiveLicenceExpiryEmails !== undefined)
+      data.receiveLicenceExpiryEmails = dto.receiveLicenceExpiryEmails;
     const updated = await this.prisma.user.update({
       where: { id },
       data: data as object,
-      select: { id: true, email: true, displayName: true, role: true, isActive: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        receiveLicenceExpiryEmails: true,
+      },
     });
     await this.audit.log({
       tenantId,

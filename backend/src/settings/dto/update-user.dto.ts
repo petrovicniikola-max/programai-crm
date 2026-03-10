@@ -19,4 +19,10 @@ export class UpdateUserDto {
   @Type(() => Boolean)
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Receive licence expiry notification emails' })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  receiveLicenceExpiryEmails?: boolean;
 }

@@ -7,8 +7,16 @@ import {
   Param,
   Query,
   UseGuards,
+  Res,
+  Header,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { LicenceService } from './licence.service';
 import { LicenceAlertsService } from './licence-alerts.service';
 import { CreateLicenceDto } from './dto/create-licence.dto';
@@ -82,6 +90,61 @@ export class LicenceController {
     const take = limit ? Math.min(parseInt(limit, 10) || 50, 200) : 50;
     const skip = offset ? Math.max(0, parseInt(offset, 10)) : 0;
     return this.alertsService.getLogs(tenantId, take, skip);
+  }
+
+  @Get('export')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @ApiOperation({ summary: 'Export licences as CSV' })
+  @ApiQuery({ name: 'format', required: false, enum: ['csv'] })
+  async exportCsv(
+    @CurrentUser('tenantId') tenantId: string,
+    @Res() res: Response,
+    @Query() query: ListLicencesQueryDto,
+  ) {
+    const csv = await this.licenceService.exportCsv(tenantId, query);
+    const filename = `licences_${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  }
+
+  @Get('import/template')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @ApiOperation({ summary: 'Download sample CSV for licence import' })
+  getImportTemplate(@Res() res: Response) {
+    const csv = this.licenceService.getImportTemplateCsv();
+    res.setHeader('Content-Disposition', 'attachment; filename="licences_import_primer.csv"');
+    res.send(csv);
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Licence stats for dashboard' })
+  stats(@CurrentUser('tenantId') tenantId: string) {
+    return this.licenceService.stats(tenantId);
+  }
+
+  @Post('import')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({ summary: 'Import licences from CSV file' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
+  async importCsv(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @UploadedFile() file?: { buffer: Buffer },
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Fajl je obavezan (polje "file")');
+    return this.licenceService.importFromCsv(tenantId, userId, file.buffer);
   }
 
   @Get(':id')

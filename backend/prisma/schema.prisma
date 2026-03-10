@@ -148,6 +148,7 @@ model User {
   role              UserRole
   isActive          Boolean         @default(true)
   isPlatformAdmin   Boolean         @default(false)
+  receiveLicenceExpiryEmails Boolean @default(false)
   tenantId          String?
   tenant            Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdAt         DateTime        @default(now())
