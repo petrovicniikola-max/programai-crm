@@ -33,5 +33,5 @@ COPY --from=builder /app/prisma.config.ts ./
 
 EXPOSE 3001
 
-# Seed pokrećemo kao node prisma/seed.js (bez ts-node u kontejneru)
-CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node dist/src/main"]
+# Seed pa start. (migrate deploy izostavljen kad je baza već usklađena sa db push; za nove migracije pokrenuti ručno.)
+CMD ["sh", "-c", "node prisma/seed.js && node dist/src/main"]
