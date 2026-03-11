@@ -23,8 +23,15 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
 
   const frontendUrl = process.env.FRONTEND_URL;
-  const corsOrigins = ['http://localhost:3000', 'http://localhost:3001'];
-  if (frontendUrl) corsOrigins.push(frontendUrl.replace(/\/$/, ''));
+  const corsOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://crm.estuar.rs',
+  ];
+  if (frontendUrl) {
+    const url = frontendUrl.replace(/\/$/, '');
+    if (url && !corsOrigins.includes(url)) corsOrigins.push(url);
+  }
   app.enableCors({
     origin: corsOrigins,
     credentials: true,
