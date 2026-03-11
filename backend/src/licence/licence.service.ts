@@ -64,7 +64,17 @@ export class LicenceService {
       if (query.validFrom) where.validTo.gte = new Date(query.validFrom);
       if (query.validTo) where.validTo.lte = new Date(query.validTo);
     }
-    if (query.expiringInDays != null) {
+    if (query.expiringFromDays != null && query.expiringToDays != null) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const start = new Date(today);
+      start.setDate(start.getDate() + query.expiringFromDays);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(today);
+      end.setDate(end.getDate() + query.expiringToDays);
+      end.setHours(23, 59, 59, 999);
+      where.validTo = { gte: start, lte: end };
+    } else if (query.expiringInDays != null) {
       const now = new Date();
       const end = new Date(now);
       end.setDate(end.getDate() + query.expiringInDays);
@@ -89,6 +99,7 @@ export class LicenceService {
   async update(tenantId: string, userId: string, id: string, dto: UpdateLicenceDto) {
     await this.findOne(tenantId, id);
     const data: Record<string, unknown> = {};
+    if (dto.companyId !== undefined) data.companyId = dto.companyId;
     if (dto.deviceId !== undefined) data.deviceId = dto.deviceId || null;
     if (dto.productName !== undefined) data.productName = dto.productName.trim();
     if (dto.licenceKey !== undefined) data.licenceKey = dto.licenceKey?.trim() || null;
@@ -158,14 +169,26 @@ export class LicenceService {
     const activeCount = await this.prisma.licence.count({
       where: { tenantId, status: 'ACTIVE' },
     });
+    const settings = await this.prisma.tenantSettings.findUnique({
+      where: { tenantId },
+    });
+    const notificationsDaysBefore = (settings?.notificationsDaysBefore as number[] | null) ?? [
+      30, 14, 7, 1,
+    ];
+    const days = [...notificationsDaysBefore].filter((d) => typeof d === 'number' && d >= 0).sort((a, b) => b - a);
     const expiring: Record<string, number> = {};
-    const days = [30, 14, 7, 1];
     const today = new Date();
-    for (const d of days) {
+    today.setHours(0, 0, 0, 0);
+    for (let i = 0; i < days.length; i++) {
+      const d = days[i];
+      const prev = i < days.length - 1 ? days[i + 1]! : 0;
+      const rangeStartDays = prev + 1;
+      const rangeEndDays = d;
       const start = new Date(today);
-      start.setDate(start.getDate() + d);
+      start.setDate(start.getDate() + rangeStartDays);
       start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
+      const end = new Date(today);
+      end.setDate(end.getDate() + rangeEndDays);
       end.setHours(23, 59, 59, 999);
       const count = await this.prisma.licence.count({
         where: {
@@ -176,7 +199,7 @@ export class LicenceService {
       });
       expiring[String(d)] = count;
     }
-    return { activeCount, expiring };
+    return { activeCount, expiring, expiringDays: days };
   }
 
   /** CSV export with same filters as findAll */

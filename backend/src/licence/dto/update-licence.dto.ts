@@ -5,6 +5,11 @@ export class UpdateLicenceDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  companyId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   deviceId?: string;
 
   @ApiPropertyOptional()

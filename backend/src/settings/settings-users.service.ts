@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -31,6 +31,9 @@ export class SettingsUsersService {
 
   async create(tenantId: string, actorUserId: string, dto: CreateUserDto) {
     const email = dto.email.trim().toLowerCase();
+    if (dto.role === 'USER' && !dto.companyId?.trim()) {
+      throw new BadRequestException('companyId is required when role is USER');
+    }
     const existing = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email } },
     });
@@ -43,6 +46,7 @@ export class SettingsUsersService {
         displayName: dto.displayName?.trim() || null,
         passwordHash,
         role: dto.role,
+        companyId: dto.companyId?.trim() || null,
         receiveLicenceExpiryEmails: dto.receiveLicenceExpiryEmails ?? false,
       },
       select: {
@@ -50,6 +54,7 @@ export class SettingsUsersService {
         email: true,
         displayName: true,
         role: true,
+        companyId: true,
         isActive: true,
         createdAt: true,
         receiveLicenceExpiryEmails: true,

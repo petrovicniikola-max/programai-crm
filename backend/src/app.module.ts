@@ -20,6 +20,7 @@ import { DeviceModule } from './device/device.module';
 import { LicenceModule } from './licence/licence.module';
 import { PlatformModule } from './platform/platform.module';
 import { PublicModule } from './public/public.module';
+import { ReportsModule } from './reports/reports.module';
 
 const redisEnabled = process.env.REDIS_ENABLED === 'true';
 
@@ -59,6 +60,7 @@ const redisEnabled = process.env.REDIS_ENABLED === 'true';
     LicenceModule.forRoot(),
     PlatformModule,
     PublicModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

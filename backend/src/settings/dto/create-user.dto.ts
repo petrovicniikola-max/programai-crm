@@ -17,9 +17,14 @@ export class CreateUserDto {
   @MinLength(8)
   password!: string;
 
-  @ApiProperty({ enum: ['SUPER_ADMIN', 'SUPPORT', 'SALES'] })
+  @ApiProperty({ enum: ['SUPER_ADMIN', 'SUPPORT', 'SALES', 'USER'] })
   @IsEnum(UserRole)
   role!: UserRole;
+
+  @ApiPropertyOptional({ description: 'Company id for USER role (required when role is USER)' })
+  @IsOptional()
+  @IsString()
+  companyId?: string;
 
   @ApiPropertyOptional({ description: 'Receive licence expiry notification emails' })
   @IsOptional()

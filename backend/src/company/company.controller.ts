@@ -53,4 +53,10 @@ export class CompanyController {
   getDevicesForCompany(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.companyService.findDevices(tenantId, id);
   }
+
+  @Get(':id/users')
+  @ApiOperation({ summary: 'List users for company (e.g. USER role accounts)' })
+  getUsersForCompany(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
+    return this.companyService.findUsers(tenantId, id);
+  }
 }

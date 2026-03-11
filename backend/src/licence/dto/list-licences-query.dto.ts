@@ -22,6 +22,22 @@ export class ListLicencesQueryDto {
   @Max(365)
   expiringInDays?: number;
 
+  @ApiPropertyOptional({ description: 'Licences expiring from this many days from today (inclusive)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  expiringFromDays?: number;
+
+  @ApiPropertyOptional({ description: 'Licences expiring up to this many days from today (inclusive)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  expiringToDays?: number;
+
   @ApiPropertyOptional({ description: 'From date (ISO) for validTo range' })
   @IsOptional()
   @IsDateString()

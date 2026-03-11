@@ -110,6 +110,51 @@ export class FormShareService {
       return { sent: false, error: err };
     }
   }
+
+  /** Send report email with CSV attachment to one or more recipients. */
+  async sendReportEmail(params: {
+    tenantId: string;
+    to: string[];
+    subject: string;
+    text: string;
+    attachment: { filename: string; content: string };
+  }): Promise<{ sent: number; failed: number; errors?: string[] }> {
+    if (params.to.length === 0) return { sent: 0, failed: 0 };
+
+    const settings = await this.prisma.tenantSettings.findUnique({
+      where: { tenantId: params.tenantId },
+    });
+    const fromName = settings?.emailFromName ?? null;
+    const fromAddress =
+      settings?.emailFromAddress ?? this.config.get<string>('SMTP_FROM') ?? 'noreply@localhost';
+    const from = fromName ? `"${fromName.replace(/"/g, '')}" <${fromAddress}>` : fromAddress;
+
+    const tenantTransport = settings ? this.transporterFromTenantSettings(settings) : null;
+    const transport = tenantTransport ?? this.transporter ?? (await this.getEtherealTransporter());
+
+    let sent = 0;
+    const errors: string[] = [];
+    for (const toEmail of params.to) {
+      try {
+        await transport.sendMail({
+          from,
+          to: toEmail,
+          subject: params.subject,
+          text: params.text,
+          attachments: [
+            {
+              filename: params.attachment.filename,
+              content: params.attachment.content,
+            },
+          ],
+        });
+        sent++;
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : String(e));
+      }
+    }
+    return { sent, failed: params.to.length - sent, errors: errors.length ? errors : undefined };
+  }
 }
 
 function escapeHtml(s: string): string {

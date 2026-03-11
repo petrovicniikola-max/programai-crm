@@ -13,6 +13,7 @@ enum UserRole {
   SUPER_ADMIN
   SUPPORT
   SALES
+  USER
 }
 
 enum TicketPriority {
@@ -120,6 +121,8 @@ model TenantSettings {
   emailProvider           String?  // 'GOOGLE' | 'M365' – za SMTP
   emailPassword           String?  // App password / lozinka za slanje (nikad u odgovoru)
   notificationsDaysBefore Json?
+  reportSchedule          String?  // 'none' | 'daily' | 'weekly' – automatski izveštaj
+  reportEmails            Json?    // string[] – primaoci izveštaja
   jwtAccessTtlMinutes     Int?     @default(10080)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -150,6 +153,8 @@ model User {
   isPlatformAdmin   Boolean         @default(false)
   receiveLicenceExpiryEmails Boolean @default(false)
   tenantId          String?
+  companyId         String?
+  company           Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
   tenant            Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -181,6 +186,14 @@ model Company {
   tickets    Ticket[]
   devices    Device[]
   licences   Licence[]
+  users      User[]
+  // Dodaci (add-ons) – lampice aktivno/neaktivno
+  addOnViewInvoicesAllDevices Boolean @default(false)
+  addOnLastInvoice            Boolean @default(false)
+  addOnAlarmsEmail            Boolean @default(false)
+  addOnCashInvoice            Boolean @default(false)
+  addOnApiAccess              Boolean @default(false)
+  addOnReportScheduling       Boolean @default(false)
 
   @@unique([tenantId, key])
 }
@@ -455,6 +468,15 @@ model Device {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
   licences   Licence[]
+  // Meta / podešavanja uređaja
+  testDevice           Boolean @default(false)
+  dpu                  Boolean @default(false)
+  sufEnvironment       String? // produkciono, test, itd.
+  eFakturaEnvironment   String?
+  paymentType          String?
+  accountSync          String? // isključena, uključena
+  teronPaymentGateway  Boolean @default(false)
+  mdmProfileName       String?
 
   @@index([tenantId, companyId, updatedAt])
   @@unique([tenantId, serialNo])

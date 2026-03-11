@@ -8,8 +8,9 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
+      whitelist: false,
+      forbidNonWhitelisted: false,
+      forbidUnknownValues: false,
     }),
   );
   const config = new DocumentBuilder()
@@ -22,7 +23,7 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
 
   const frontendUrl = process.env.FRONTEND_URL;
-  const corsOrigins = ['http://localhost:3001'];
+  const corsOrigins = ['http://localhost:3000', 'http://localhost:3001'];
   if (frontendUrl) corsOrigins.push(frontendUrl.replace(/\/$/, ''));
   app.enableCors({
     origin: corsOrigins,
@@ -31,6 +32,6 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3001);
 }
 bootstrap();

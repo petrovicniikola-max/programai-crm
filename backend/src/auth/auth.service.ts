@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -33,6 +33,8 @@ function hashToken(token: string): string {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -63,58 +65,75 @@ export class AuthService {
     password: string,
     meta?: { ip?: string; userAgent?: string },
   ): Promise<LoginResult> {
-    const user = await this.validateUser(email, password);
-    if (!user) {
-      await this.audit.log({
-        action: 'AUTH_LOGIN_FAILED',
-        metadata: { email: email.trim().toLowerCase() },
-        ip: meta?.ip,
-        userAgent: meta?.userAgent,
-      });
-      throw new UnauthorizedException('Invalid email or password');
-    }
-    const accessExpiresIn = this.config.get('JWT_EXPIRES_IN') ?? '60m';
-    const access_token = this.jwt.sign({
-      sub: user.id,
-      tenantId: user.tenantId,
-      role: user.role,
-      email: user.email,
-      displayName: user.displayName,
-      isPlatformAdmin: user.isPlatformAdmin,
-    } as JwtPayload);
-    const refreshTokenPlain = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + REFRESH_EXPIRY_DAYS);
-    await this.prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        tenantId: user.tenantId,
-        tokenHash: hashToken(refreshTokenPlain),
-        expiresAt,
-      },
-    });
-    const expiresInSec = typeof accessExpiresIn === 'string' ? (accessExpiresIn.endsWith('m') ? parseInt(accessExpiresIn, 10) * 60 : parseInt(accessExpiresIn, 10)) : 3600;
-    await this.audit.log({
-      tenantId: user.tenantId ?? undefined,
-      actorUserId: user.id,
-      action: 'AUTH_LOGIN',
-      metadata: { email: user.email },
-      ip: meta?.ip,
-      userAgent: meta?.userAgent,
-    });
-    return {
-      access_token,
-      refresh_token: refreshTokenPlain,
-      expires_in: expiresInSec,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
+    try {
+      const user = await this.validateUser(email, password);
+      if (!user) {
+        try {
+          await this.audit.log({
+            action: 'AUTH_LOGIN_FAILED',
+            metadata: { email: email.trim().toLowerCase() },
+            ip: meta?.ip,
+            userAgent: meta?.userAgent,
+          });
+        } catch (e) {
+          this.logger.warn('Audit log AUTH_LOGIN_FAILED failed', e);
+        }
+        throw new UnauthorizedException('Invalid email or password');
+      }
+      const accessExpiresIn = this.config.get('JWT_EXPIRES_IN') ?? '60m';
+      const access_token = this.jwt.sign({
+        sub: user.id,
         tenantId: user.tenantId,
         role: user.role,
+        email: user.email,
+        displayName: user.displayName ?? undefined,
         isPlatformAdmin: user.isPlatformAdmin,
-      },
-    };
+      } as JwtPayload);
+      const refreshTokenPlain = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + REFRESH_EXPIRY_DAYS);
+      await this.prisma.refreshToken.create({
+        data: {
+          userId: user.id,
+          tenantId: user.tenantId,
+          tokenHash: hashToken(refreshTokenPlain),
+          expiresAt,
+        },
+      });
+      const expiresInSec = typeof accessExpiresIn === 'string' ? (accessExpiresIn.endsWith('m') ? parseInt(accessExpiresIn, 10) * 60 : parseInt(accessExpiresIn, 10)) : 3600;
+      try {
+        await this.audit.log({
+          tenantId: user.tenantId ?? undefined,
+          actorUserId: user.id,
+          action: 'AUTH_LOGIN',
+          metadata: { email: user.email },
+          ip: meta?.ip,
+          userAgent: meta?.userAgent,
+        });
+      } catch (e) {
+        this.logger.warn('Audit log AUTH_LOGIN failed', e);
+      }
+      return {
+        access_token,
+        refresh_token: refreshTokenPlain,
+        expires_in: expiresInSec,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          tenantId: user.tenantId,
+          role: user.role,
+          isPlatformAdmin: user.isPlatformAdmin,
+        },
+      };
+    } catch (err) {
+      if (err instanceof UnauthorizedException) throw err;
+      this.logger.error('Login error', err instanceof Error ? err.stack : String(err));
+      const msg = process.env.NODE_ENV === 'production'
+        ? 'Login temporarily unavailable'
+        : (err instanceof Error ? err.message : String(err));
+      throw new InternalServerErrorException(msg);
+    }
   }
 
   async refresh(

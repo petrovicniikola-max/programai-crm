@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsISO8601 } from 'class-validator';
 import { DeviceStatus } from '@prisma/client';
 
 export class ListDevicesQueryDto {
@@ -17,4 +17,14 @@ export class ListDevicesQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ description: 'Created at from (ISO date)' })
+  @IsOptional()
+  @IsISO8601()
+  createdAtFrom?: string;
+
+  @ApiPropertyOptional({ description: 'Created at to (ISO date)' })
+  @IsOptional()
+  @IsISO8601()
+  createdAtTo?: string;
 }

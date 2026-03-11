@@ -50,6 +50,12 @@ export class CompanyService {
         ...(dto.address !== undefined && { address: dto.address }),
         ...(dto.pib !== undefined && { pib: dto.pib }),
         ...(dto.mb !== undefined && { mb: dto.mb }),
+        ...(dto.addOnViewInvoicesAllDevices !== undefined && { addOnViewInvoicesAllDevices: dto.addOnViewInvoicesAllDevices }),
+        ...(dto.addOnLastInvoice !== undefined && { addOnLastInvoice: dto.addOnLastInvoice }),
+        ...(dto.addOnAlarmsEmail !== undefined && { addOnAlarmsEmail: dto.addOnAlarmsEmail }),
+        ...(dto.addOnCashInvoice !== undefined && { addOnCashInvoice: dto.addOnCashInvoice }),
+        ...(dto.addOnApiAccess !== undefined && { addOnApiAccess: dto.addOnApiAccess }),
+        ...(dto.addOnReportScheduling !== undefined && { addOnReportScheduling: dto.addOnReportScheduling }),
       },
     });
   }
@@ -65,6 +71,22 @@ export class CompanyService {
       where: { tenantId, companyId },
       include: { company: true },
       orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  async findUsers(tenantId: string, companyId: string) {
+    await this.findOne(tenantId, companyId);
+    return this.prisma.user.findMany({
+      where: { tenantId, companyId },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { email: 'asc' },
     });
   }
 }

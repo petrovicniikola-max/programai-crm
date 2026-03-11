@@ -30,6 +30,14 @@ export class DeviceService {
         serialNo,
         status: dto.status ?? 'ACTIVE',
         notes: dto.notes?.trim() || null,
+        testDevice: dto.testDevice ?? false,
+        dpu: dto.dpu ?? false,
+        sufEnvironment: dto.sufEnvironment?.trim() || null,
+        eFakturaEnvironment: dto.eFakturaEnvironment?.trim() || null,
+        paymentType: dto.paymentType?.trim() || null,
+        accountSync: dto.accountSync?.trim() || null,
+        teronPaymentGateway: dto.teronPaymentGateway ?? false,
+        mdmProfileName: dto.mdmProfileName?.trim() || null,
       },
       include: { company: true },
     });
@@ -45,12 +53,21 @@ export class DeviceService {
   }
 
   async findAll(tenantId: string, query: ListDevicesQueryDto) {
-    const where: { tenantId: string; companyId?: string; status?: DeviceStatus; serialNo?: { contains: string; mode: 'insensitive' } } = {
-      tenantId,
-    };
+    const where: {
+      tenantId: string;
+      companyId?: string;
+      status?: DeviceStatus;
+      serialNo?: { contains: string; mode: 'insensitive' };
+      createdAt?: { gte?: Date; lte?: Date };
+    } = { tenantId };
     if (query.companyId) where.companyId = query.companyId;
     if (query.status) where.status = query.status as DeviceStatus;
     if (query.search?.trim()) where.serialNo = { contains: query.search.trim(), mode: 'insensitive' };
+    if (query.createdAtFrom || query.createdAtTo) {
+      where.createdAt = {};
+      if (query.createdAtFrom) where.createdAt.gte = new Date(query.createdAtFrom);
+      if (query.createdAtTo) where.createdAt.lte = new Date(query.createdAtTo);
+    }
     return this.prisma.device.findMany({
       where,
       include: { company: true },
@@ -87,6 +104,14 @@ export class DeviceService {
     if (dto.serialNo !== undefined) data.serialNo = serialNo ?? undefined;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
+    if (dto.testDevice !== undefined) data.testDevice = dto.testDevice;
+    if (dto.dpu !== undefined) data.dpu = dto.dpu;
+    if (dto.sufEnvironment !== undefined) data.sufEnvironment = dto.sufEnvironment?.trim() || null;
+    if (dto.eFakturaEnvironment !== undefined) data.eFakturaEnvironment = dto.eFakturaEnvironment?.trim() || null;
+    if (dto.paymentType !== undefined) data.paymentType = dto.paymentType?.trim() || null;
+    if (dto.accountSync !== undefined) data.accountSync = dto.accountSync?.trim() || null;
+    if (dto.teronPaymentGateway !== undefined) data.teronPaymentGateway = dto.teronPaymentGateway;
+    if (dto.mdmProfileName !== undefined) data.mdmProfileName = dto.mdmProfileName?.trim() || null;
     const device = await this.prisma.device.update({
       where: { id },
       data: data as object,

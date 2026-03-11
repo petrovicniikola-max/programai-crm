@@ -58,13 +58,23 @@ export class TicketService {
   }
 
   async findAll(tenantId: string, q: TicketListQueryDto) {
-    const where: Record<string, unknown> = { tenantId };
+    const where: Prisma.TicketWhereInput = { tenantId };
     if (q.status) where.status = q.status;
     if (q.type) where.type = q.type;
     if (q.assigneeId === 'unassigned') where.assigneeId = null;
     else if (q.assigneeId) where.assigneeId = q.assigneeId;
     if (q.createdByUserId) where.createdByUserId = q.createdByUserId;
     if (q.companyId) where.companyId = q.companyId;
+    if (q.createdAtFrom || q.createdAtTo) {
+      where.createdAt = {};
+      if (q.createdAtFrom) (where.createdAt as Prisma.DateTimeFilter).gte = new Date(q.createdAtFrom);
+      if (q.createdAtTo) (where.createdAt as Prisma.DateTimeFilter).lte = new Date(q.createdAtTo);
+    }
+    if (q.updatedAtFrom || q.updatedAtTo) {
+      where.updatedAt = {};
+      if (q.updatedAtFrom) (where.updatedAt as Prisma.DateTimeFilter).gte = new Date(q.updatedAtFrom);
+      if (q.updatedAtTo) (where.updatedAt as Prisma.DateTimeFilter).lte = new Date(q.updatedAtTo);
+    }
 
     const page = Math.max(1, q.page ?? 1);
     const take = Math.min(100, Math.max(1, q.limit ?? 20));

@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsEnum, IsString, IsInt, Min, Max } from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsInt, Min, Max, IsISO8601 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TicketStatus, TicketType } from '@prisma/client';
 
@@ -28,6 +28,26 @@ export class TicketListQueryDto {
   @IsOptional()
   @IsString()
   companyId?: string;
+
+  @ApiPropertyOptional({ description: 'Created at from (ISO date)' })
+  @IsOptional()
+  @IsISO8601()
+  createdAtFrom?: string;
+
+  @ApiPropertyOptional({ description: 'Created at to (ISO date)' })
+  @IsOptional()
+  @IsISO8601()
+  createdAtTo?: string;
+
+  @ApiPropertyOptional({ description: 'Updated at from (ISO date)' })
+  @IsOptional()
+  @IsISO8601()
+  updatedAtFrom?: string;
+
+  @ApiPropertyOptional({ description: 'Updated at to (ISO date)' })
+  @IsOptional()
+  @IsISO8601()
+  updatedAtTo?: string;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
