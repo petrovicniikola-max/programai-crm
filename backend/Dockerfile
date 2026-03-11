@@ -17,6 +17,9 @@ ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npx prisma generate
 RUN npm run build
 
+# Kompajliraj seed u JS da u runtime imageu ne treba ts-node
+RUN npx tsc prisma/seed.ts --outDir prisma --module commonjs --target ES2020 --esModuleInterop --skipLibCheck --resolveJsonModule --moduleResolution node
+
 # Runtime
 FROM node:20-alpine
 
@@ -30,4 +33,5 @@ COPY --from=builder /app/prisma.config.ts ./
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/src/main"]
+# Seed pokrećemo kao node prisma/seed.js (bez ts-node u kontejneru)
+CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node dist/src/main"]
