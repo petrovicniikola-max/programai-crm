@@ -18,6 +18,39 @@ export interface ReportsOverviewDto {
   companiesCount: number;
 }
 
+const REPORT_TZ = 'Europe/Belgrade';
+
+/** Start (00:00:00.000) and end (23:59:59.999) of the given calendar day in REPORT_TZ, as UTC Date. */
+function getDayBoundsInTz(date: Date): { start: Date; end: Date } {
+  const y = parseInt(
+    date.toLocaleString('en-CA', { timeZone: REPORT_TZ, year: 'numeric' }),
+    10,
+  );
+  const m =
+    parseInt(
+      date.toLocaleString('en-CA', { timeZone: REPORT_TZ, month: '2-digit' }),
+      10,
+    ) - 1;
+  const d = parseInt(
+    date.toLocaleString('en-CA', { timeZone: REPORT_TZ, day: '2-digit' }),
+    10,
+  );
+  const noonUtc = new Date(Date.UTC(y, m, d, 12, 0, 0, 0));
+  const tzHour = parseInt(
+    noonUtc.toLocaleString('en-US', {
+      timeZone: REPORT_TZ,
+      hour: 'numeric',
+      hour12: false,
+    }),
+    10,
+  );
+  const offsetHours = tzHour - 12;
+  const startUtc = Date.UTC(y, m, d, 0, 0, 0, 0) - offsetHours * 3600 * 1000;
+  const start = new Date(startUtc);
+  const end = new Date(startUtc + 24 * 3600 * 1000 - 1);
+  return { start, end };
+}
+
 function escapeCsv(val: string): string {
   if (/[,"\r\n]/.test(val)) return `"${val.replace(/"/g, '""')}"`;
   return val;
@@ -253,9 +286,24 @@ export class ReportsService {
     const [hStr, mStr] = scheduleTime.split(':');
     const hour = Number(hStr) || 0;
     const minute = Number(mStr) || 0;
-    const isEarly = hour < 4 || (hour === 4 && minute === 0); // 00:00–04:00
+    const isEarly = hour < 4 || (hour === 4 && minute === 0); // 00:00–04:00 → prethodni dan
 
-    // Helper to clone date at midnight/end-of-day
+    if (item.schedule === 'daily') {
+      const dayInTz = new Date(now);
+      if (isEarly) dayInTz.setDate(dayInTz.getDate() - 1);
+      return getDayBoundsInTz(dayInTz);
+    }
+
+    if (item.schedule === 'weekly') {
+      const endDay = new Date(now);
+      if (isEarly) endDay.setDate(endDay.getDate() - 1);
+      const { end } = getDayBoundsInTz(endDay);
+      const startDay = new Date(endDay);
+      startDay.setDate(startDay.getDate() - 6);
+      const { start } = getDayBoundsInTz(startDay);
+      return { start, end };
+    }
+
     const atStartOfDay = (d: Date) => {
       const x = new Date(d);
       x.setHours(0, 0, 0, 0);
@@ -266,30 +314,6 @@ export class ReportsService {
       x.setHours(23, 59, 59, 999);
       return x;
     };
-
-    if (item.schedule === 'daily') {
-      const base = new Date(now);
-      if (isEarly) {
-        // 00:00–04:00 → prethodni dan
-        base.setDate(base.getDate() - 1);
-      }
-      const start = atStartOfDay(base);
-      const end = atEndOfDay(base);
-      return { start, end };
-    }
-
-    if (item.schedule === 'weekly') {
-      const endBase = new Date(now);
-      if (isEarly) {
-        // ne uključuje tekući dan
-        endBase.setDate(endBase.getDate() - 1);
-      }
-      const end = atEndOfDay(endBase);
-      const startBase = new Date(endBase);
-      startBase.setDate(startBase.getDate() - 6); // 7 dana ukupno
-      const start = atStartOfDay(startBase);
-      return { start, end };
-    }
 
     if (item.schedule === 'monthly') {
       const year = now.getFullYear();
@@ -378,6 +402,10 @@ export class ReportsService {
     tenantId: string,
     dto: { executeAll?: boolean; configIndex?: number; reportType?: 'tickets' | 'devices' | 'licences'; daysBack?: number; deviceIds?: string[] },
   ): Promise<{ sent: number; failed: number; message: string }> {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[ExecuteReport] tenant=${tenantId} configIndex=${dto.configIndex} executeAll=${dto.executeAll} reportType=${dto.reportType}`,
+    );
     const config = await this.getAlertsConfig(tenantId);
     const configs = config.reportEmailConfigs ?? [];
 
