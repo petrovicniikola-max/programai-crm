@@ -141,6 +141,15 @@ export class ReportsService {
       take: 10000,
     });
 
+    const createdRange =
+      q.createdAtFrom || q.createdAtTo ? `${q.createdAtFrom ?? '...'} -> ${q.createdAtTo ?? '...'}` : 'none';
+    const updatedRange =
+      q.updatedAtFrom || q.updatedAtTo ? `${q.updatedAtFrom ?? '...'} -> ${q.updatedAtTo ?? '...'}` : 'none';
+    // eslint-disable-next-line no-console
+    console.log(
+      `[TicketsCsv] tenant=${tenantId} createdAt=${createdRange} updatedAt=${updatedRange} count=${rows.length}`,
+    );
+
     const header =
       'id,key,title,status,type,companyId,contactId,assigneeId,createdAt,updatedAt,callOccurredAt,callDurationMinutes';
     const lines = rows.map(
@@ -322,11 +331,11 @@ export class ReportsService {
     let filename: string;
     if (item.reportType === 'tickets') {
       const ticketQuery: {
-        updatedAtFrom: string;
-        updatedAtTo: string;
+        createdAtFrom: string;
+        createdAtTo: string;
         statuses?: ('OPEN' | 'IN_PROGRESS' | 'DONE')[];
         assigneeId?: string;
-      } = { updatedAtFrom: fromIso, updatedAtTo: toIso };
+      } = { createdAtFrom: fromIso, createdAtTo: toIso };
       if (item.ticketStatuses?.length) ticketQuery.statuses = item.ticketStatuses;
       if (item.assigneeId) ticketQuery.assigneeId = item.assigneeId;
       csv = await this.getTicketsCsv(tenantId, ticketQuery);
@@ -347,6 +356,10 @@ export class ReportsService {
       csv = await this.licenceService.exportCsv(tenantId, licenceQuery);
       filename = `izvestaj_licence_${dateStr}.csv`;
     }
+
+    const rowCount = Math.max(0, csv.split(/\r?\n/).length - 1);
+    // eslint-disable-next-line no-console
+    console.log(`[Report] type=${item.reportType} period=${fromIso} -> ${toIso} rows=${rowCount}`);
 
     const typeLabel = item.reportType === 'tickets' ? 'Tiketi' : item.reportType === 'devices' ? 'Uređaji' : 'Licence';
     const subject = `Izveštaj: ${typeLabel}`;
@@ -417,7 +430,7 @@ export class ReportsService {
     let csv: string;
     let filename: string;
     if (reportType === 'tickets') {
-      csv = await this.getTicketsCsv(tenantId, { updatedAtFrom: fromIso, updatedAtTo: toIso });
+      csv = await this.getTicketsCsv(tenantId, { createdAtFrom: fromIso, createdAtTo: toIso });
       filename = `izvestaj_tiketi_${dateStr}.csv`;
     } else if (reportType === 'devices') {
       const deviceQuery: { createdAtFrom?: string; createdAtTo?: string; ids?: string[] } = {
