@@ -237,16 +237,83 @@ export class ReportsService {
     return schedule === 'daily' ? 1 : schedule === 'weekly' ? 7 : schedule === 'monthly' ? 30 : 365;
   }
 
+  private getDateRangeForConfig(item: ReportEmailConfigItem): { start: Date; end: Date } {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    const scheduleTime = item.scheduleTime ?? '08:00';
+    const [hStr, mStr] = scheduleTime.split(':');
+    const hour = Number(hStr) || 0;
+    const minute = Number(mStr) || 0;
+    const isEarly = hour < 4 || (hour === 4 && minute === 0); // 00:00–04:00
+
+    // Helper to clone date at midnight/end-of-day
+    const atStartOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      return x;
+    };
+    const atEndOfDay = (d: Date) => {
+      const x = new Date(d);
+      x.setHours(23, 59, 59, 999);
+      return x;
+    };
+
+    if (item.schedule === 'daily') {
+      const base = new Date(now);
+      if (isEarly) {
+        // 00:00–04:00 → prethodni dan
+        base.setDate(base.getDate() - 1);
+      }
+      const start = atStartOfDay(base);
+      const end = atEndOfDay(base);
+      return { start, end };
+    }
+
+    if (item.schedule === 'weekly') {
+      const endBase = new Date(now);
+      if (isEarly) {
+        // ne uključuje tekući dan
+        endBase.setDate(endBase.getDate() - 1);
+      }
+      const end = atEndOfDay(endBase);
+      const startBase = new Date(endBase);
+      startBase.setDate(startBase.getDate() - 6); // 7 dana ukupno
+      const start = atStartOfDay(startBase);
+      return { start, end };
+    }
+
+    if (item.schedule === 'monthly') {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const firstOfCurrentMonth = new Date(year, month, 1);
+      const lastOfCurrentMonth = new Date(year, month + 1, 0);
+      const firstOfPreviousMonth = new Date(year, month - 1, 1);
+      const lastOfPreviousMonth = new Date(year, month, 0);
+
+      if (item.scheduleMonthOption === '1st_previous') {
+        // prethodni mesec
+        return { start: atStartOfDay(firstOfPreviousMonth), end: atEndOfDay(lastOfPreviousMonth) };
+      }
+      // tekući mesec
+      return { start: atStartOfDay(firstOfCurrentMonth), end: atEndOfDay(lastOfCurrentMonth) };
+    }
+
+    // yearly – tekuća ili prethodna godina (celi kalendarski opseg)
+    const yearNow = now.getFullYear();
+    const year =
+      item.scheduleYearOption === 'previous'
+        ? yearNow - 1
+        : yearNow;
+    const firstOfYear = new Date(year, 0, 1);
+    const lastOfYear = new Date(year, 11, 31);
+    return { start: atStartOfDay(firstOfYear), end: atEndOfDay(lastOfYear) };
+  }
+
   private async sendOneReportForConfig(
     tenantId: string,
     item: ReportEmailConfigItem,
   ): Promise<{ sent: number; failed: number }> {
-    const daysBack = ReportsService.daysBackFromSchedule(item.schedule);
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - daysBack);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
+    const { start, end } = this.getDateRangeForConfig(item);
     const fromIso = start.toISOString();
     const toIso = end.toISOString();
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -282,8 +349,8 @@ export class ReportsService {
     }
 
     const typeLabel = item.reportType === 'tickets' ? 'Tiketi' : item.reportType === 'devices' ? 'Uređaji' : 'Licence';
-    const subject = `Izveštaj: ${typeLabel} (${daysBack} dana unazad)`;
-    const text = `Prilog: izveštaj za period ${start.toLocaleDateString()} – ${end.toLocaleDateString()}.\n\n— ProgramAI`;
+    const subject = `Izveštaj: ${typeLabel}`;
+    const text = `Prilog: izveštaj za period ${start.toLocaleDateString()} – ${end.toLocaleDateString()}.\n\n— CRM ESTUAR`;
 
     return this.formShareService.sendReportEmail({
       tenantId,
@@ -367,7 +434,7 @@ export class ReportsService {
 
     const typeLabel = reportType === 'tickets' ? 'Tiketi' : reportType === 'devices' ? 'Uređaji' : 'Licence';
     const subject = `Izveštaj: ${typeLabel} (${daysBack} dana unazad)`;
-    const text = `Prilog: izveštaj za period ${start.toLocaleDateString()} – ${end.toLocaleDateString()}.\n\n— ProgramAI`;
+    const text = `Prilog: izveštaj za period ${start.toLocaleDateString()} – ${end.toLocaleDateString()}.\n\n— CRM ESTUAR`;
 
     const result = await this.formShareService.sendReportEmail({
       tenantId,

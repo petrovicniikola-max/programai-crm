@@ -84,8 +84,8 @@ export class FormShareService {
 
     const subject = `Forma: ${params.formTitle}`;
     const custom = params.message?.trim() ? `\n\n${params.message.trim()}\n\n` : '\n\n';
-    const text = `Pozdrav,\n\nOvde je link ka formi "${params.formTitle}":\n${formLink}${custom}— ProgramAI`;
-    const html = `<p>Pozdrav,</p><p>Ovde je link ka formi <strong>${escapeHtml(params.formTitle)}</strong>:</p><p><a href="${escapeHtml(formLink)}">${escapeHtml(formLink)}</a></p>${params.message?.trim() ? `<p>${escapeHtml(params.message.trim())}</p>` : ''}<p>— ProgramAI</p>`;
+    const text = `Pozdrav,\n\nOvde je link ka formi "${params.formTitle}":\n${formLink}${custom}— CRM ESTUAR`;
+    const html = `<p>Pozdrav,</p><p>Ovde je link ka formi <strong>${escapeHtml(params.formTitle)}</strong>:</p><p><a href="${escapeHtml(formLink)}">${escapeHtml(formLink)}</a></p>${params.message?.trim() ? `<p>${escapeHtml(params.message.trim())}</p>` : ''}<p>— CRM ESTUAR</p>`;
 
     const tenantTransport = settings ? this.transporterFromTenantSettings(settings) : null;
     const transport = tenantTransport ?? this.transporter ?? (await this.getEtherealTransporter());
