@@ -121,8 +121,9 @@ model TenantSettings {
   emailProvider           String?  // 'GOOGLE' | 'M365' – za SMTP
   emailPassword           String?  // App password / lozinka za slanje (nikad u odgovoru)
   notificationsDaysBefore Json?
-  reportSchedule          String?  // 'none' | 'daily' | 'weekly' – automatski izveštaj
-  reportEmails            Json?    // string[] – primaoci izveštaja
+  reportSchedule          String?  // 'none' | 'daily' | 'weekly' – automatski izveštaj (legacy)
+  reportEmails            Json?    // string[] – primaoci izveštaja (legacy)
+  reportEmailConfigs       Json?    // ReportEmailConfig[] – per-email: period, tip izveštaja, kompanija, uređaji
   jwtAccessTtlMinutes     Int?     @default(10080)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

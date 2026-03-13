@@ -6,6 +6,7 @@ import { FormShareService } from '../forms/form-share.service';
 import { DeviceService } from '../device/device.service';
 import { LicenceService } from '../licence/licence.service';
 import { TicketsExportQueryDto } from './dto/tickets-export-query.dto';
+import type { ReportEmailConfigItem } from './dto/alerts-config.dto';
 
 export interface ReportsOverviewDto {
   ticketsByStatus: Record<string, number>;
@@ -117,7 +118,8 @@ export class ReportsService {
 
   async getTicketsCsv(tenantId: string, q: TicketsExportQueryDto): Promise<string> {
     const where: Prisma.TicketWhereInput = { tenantId };
-    if (q.status) where.status = q.status;
+    if (q.statuses?.length) where.status = { in: q.statuses };
+    else if (q.status) where.status = q.status;
     if (q.type) where.type = q.type;
     if (q.assigneeId === 'unassigned') where.assigneeId = null;
     else if (q.assigneeId) where.assigneeId = q.assigneeId;
@@ -161,41 +163,179 @@ export class ReportsService {
       where: { tenantId },
     });
     const daysBefore = (s?.notificationsDaysBefore as number[] | null) ?? [30, 14, 7, 1];
-    const reportSchedule = (s?.reportSchedule as 'none' | 'daily' | 'weekly') ?? 'none';
+    const reportSchedule = (s?.reportSchedule as 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly') ?? 'none';
     const reportEmails = Array.isArray(s?.reportEmails) ? (s.reportEmails as string[]) : [];
+    let reportEmailConfigs = Array.isArray(s?.reportEmailConfigs) ? (s.reportEmailConfigs as unknown as ReportEmailConfigItem[]) : [];
+    if (reportEmailConfigs.length === 0 && reportEmails.length > 0) {
+      const schedule = reportSchedule && reportSchedule !== 'none' ? (reportSchedule as 'daily' | 'weekly' | 'monthly' | 'yearly') : 'weekly';
+      reportEmailConfigs = reportEmails
+        .filter((e) => typeof e === 'string' && e.trim().length > 0)
+        .map((email) => ({ email: email.trim(), schedule, reportType: 'tickets' as const }));
+    }
     return {
       notificationsDaysBefore: daysBefore,
       reportSchedule,
       reportEmails,
+      reportEmailConfigs,
     };
   }
 
   async patchAlertsConfig(
     tenantId: string,
-    dto: { reportSchedule?: 'none' | 'daily' | 'weekly'; reportEmails?: string[] },
+    dto: {
+      reportSchedule?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+      reportEmails?: string[];
+      reportEmailConfigs?: ReportEmailConfigItem[];
+    },
   ) {
-    const update: { reportSchedule?: string; reportEmails?: string[] } = {};
-    if (dto.reportSchedule !== undefined) update.reportSchedule = dto.reportSchedule;
+    let reportSchedule: string | undefined;
+    let reportEmails: string[] | undefined;
+    let reportEmailConfigsJson: Prisma.InputJsonValue | undefined;
+
+    if (dto.reportSchedule !== undefined) reportSchedule = dto.reportSchedule;
     if (dto.reportEmails !== undefined) {
-      update.reportEmails = dto.reportEmails.filter((e) => typeof e === 'string' && e.trim().length > 0);
+      reportEmails = dto.reportEmails.filter((e) => typeof e === 'string' && e.trim().length > 0);
     }
+    if (dto.reportEmailConfigs !== undefined) {
+      const configs = dto.reportEmailConfigs
+        .filter((c) => c?.email && typeof c.email === 'string' && c.email.trim().length > 0)
+        .map((c) => ({
+          email: (c.email as string).trim(),
+          schedule: c.schedule ?? 'weekly',
+          reportType: c.reportType ?? 'tickets',
+          companyId: c.companyId?.trim() || undefined,
+          deviceIds: Array.isArray(c.deviceIds) ? c.deviceIds.filter((id) => typeof id === 'string') : undefined,
+          ticketStatuses: Array.isArray(c.ticketStatuses) ? c.ticketStatuses : undefined,
+          assigneeId: c.assigneeId?.trim() || undefined,
+          scheduleTime: c.scheduleTime?.trim() || undefined,
+          scheduleDayOfWeek: c.scheduleDayOfWeek,
+          scheduleMonthOption: c.scheduleMonthOption,
+          scheduleYearOption: c.scheduleYearOption,
+        }));
+      reportEmailConfigsJson = configs as Prisma.InputJsonValue;
+    }
+
+    const update: Prisma.TenantSettingsUpdateInput = {};
+    if (reportSchedule !== undefined) update.reportSchedule = reportSchedule;
+    if (reportEmails !== undefined) update.reportEmails = reportEmails;
+    if (reportEmailConfigsJson !== undefined) update.reportEmailConfigs = reportEmailConfigsJson;
+
     await this.prisma.tenantSettings.upsert({
       where: { tenantId },
-      create: { tenantId, ...update },
+      create: {
+        tenantId,
+        ...(reportSchedule !== undefined && { reportSchedule }),
+        ...(reportEmails !== undefined && { reportEmails }),
+        ...(reportEmailConfigsJson !== undefined && { reportEmailConfigs: reportEmailConfigsJson }),
+      },
       update,
     });
     return this.getAlertsConfig(tenantId);
   }
 
+  private static daysBackFromSchedule(schedule: 'daily' | 'weekly' | 'monthly' | 'yearly'): number {
+    return schedule === 'daily' ? 1 : schedule === 'weekly' ? 7 : schedule === 'monthly' ? 30 : 365;
+  }
+
+  private async sendOneReportForConfig(
+    tenantId: string,
+    item: ReportEmailConfigItem,
+  ): Promise<{ sent: number; failed: number }> {
+    const daysBack = ReportsService.daysBackFromSchedule(item.schedule);
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - daysBack);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    const fromIso = start.toISOString();
+    const toIso = end.toISOString();
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    let csv: string;
+    let filename: string;
+    if (item.reportType === 'tickets') {
+      const ticketQuery: {
+        updatedAtFrom: string;
+        updatedAtTo: string;
+        statuses?: ('OPEN' | 'IN_PROGRESS' | 'DONE')[];
+        assigneeId?: string;
+      } = { updatedAtFrom: fromIso, updatedAtTo: toIso };
+      if (item.ticketStatuses?.length) ticketQuery.statuses = item.ticketStatuses;
+      if (item.assigneeId) ticketQuery.assigneeId = item.assigneeId;
+      csv = await this.getTicketsCsv(tenantId, ticketQuery);
+      filename = `izvestaj_tiketi_${dateStr}.csv`;
+    } else if (item.reportType === 'devices') {
+      const deviceQuery: { createdAtFrom?: string; createdAtTo?: string; companyId?: string; ids?: string[] } = {
+        createdAtFrom: fromIso,
+        createdAtTo: toIso,
+      };
+      if (item.companyId) deviceQuery.companyId = item.companyId;
+      if (item.deviceIds?.length) deviceQuery.ids = item.deviceIds;
+      csv = await this.deviceService.exportCsv(tenantId, deviceQuery);
+      filename = `izvestaj_uredjaji_${dateStr}.csv`;
+    } else {
+      const licenceQuery: { companyId?: string; deviceIds?: string[] } = {};
+      if (item.companyId) licenceQuery.companyId = item.companyId;
+      if (item.deviceIds?.length) licenceQuery.deviceIds = item.deviceIds;
+      csv = await this.licenceService.exportCsv(tenantId, licenceQuery);
+      filename = `izvestaj_licence_${dateStr}.csv`;
+    }
+
+    const typeLabel = item.reportType === 'tickets' ? 'Tiketi' : item.reportType === 'devices' ? 'Uređaji' : 'Licence';
+    const subject = `Izveštaj: ${typeLabel} (${daysBack} dana unazad)`;
+    const text = `Prilog: izveštaj za period ${start.toLocaleDateString()} – ${end.toLocaleDateString()}.\n\n— ProgramAI`;
+
+    return this.formShareService.sendReportEmail({
+      tenantId,
+      to: [item.email],
+      subject,
+      text,
+      attachment: { filename, content: csv },
+    });
+  }
+
   async executeReport(
     tenantId: string,
-    reportType: 'tickets' | 'devices' | 'licences',
-    daysBack: number,
+    dto: { executeAll?: boolean; configIndex?: number; reportType?: 'tickets' | 'devices' | 'licences'; daysBack?: number; deviceIds?: string[] },
   ): Promise<{ sent: number; failed: number; message: string }> {
     const config = await this.getAlertsConfig(tenantId);
-    const emails = Array.isArray(config.reportEmails) ? config.reportEmails : [];
+    const configs = config.reportEmailConfigs ?? [];
+
+    if (dto.configIndex !== undefined && dto.configIndex >= 0) {
+      const item = configs[dto.configIndex];
+      if (!item?.email?.trim()) {
+        return { sent: 0, failed: 0, message: 'Stavka nije pronađena ili nema email. Sačuvajte konfiguraciju pa pokušajte ponovo.' };
+      }
+      const result = await this.sendOneReportForConfig(tenantId, item);
+      const message = result.failed === 0
+        ? `Izveštaj poslat na ${item.email}.`
+        : result.sent > 0 ? `Poslato na ${item.email}, ali neki primaoici nisu uspešni.` : 'Slanje nije uspelo.';
+      return { sent: result.sent, failed: result.failed, message };
+    }
+
+    if (dto.executeAll) {
+      if (configs.length === 0) {
+        return { sent: 0, failed: 0, message: 'Nema konfiguracija. Dodajte stavke po emailu i sačuvajte.' };
+      }
+      let sent = 0;
+      let failed = 0;
+      for (const item of configs) {
+        const result = await this.sendOneReportForConfig(tenantId, item);
+        sent += result.sent;
+        failed += result.failed;
+      }
+      const message =
+        failed === 0
+          ? `Izveštaji poslati: ${sent} emailova.`
+          : `Poslato: ${sent}, nije poslato: ${failed}.`;
+      return { sent, failed, message };
+    }
+
+    const reportType = dto.reportType ?? 'tickets';
+    const daysBack = dto.daysBack ?? 7;
+    const emails = config.reportEmails?.length ? config.reportEmails : configs.map((c) => c.email);
     if (emails.length === 0) {
-      return { sent: 0, failed: 0, message: 'Nema sačuvanih email adresa. Dodajte adrese i sačuvajte.' };
+      return { sent: 0, failed: 0, message: 'Nema sačuvanih email adresa. Dodajte konfiguraciju po emailu ili adrese i sačuvajte.' };
     }
 
     const end = new Date();
@@ -205,30 +345,27 @@ export class ReportsService {
     end.setHours(23, 59, 59, 999);
     const fromIso = start.toISOString();
     const toIso = end.toISOString();
+    const dateStr = new Date().toISOString().slice(0, 10);
 
     let csv: string;
     let filename: string;
-    const dateStr = new Date().toISOString().slice(0, 10);
-
     if (reportType === 'tickets') {
-      csv = await this.getTicketsCsv(tenantId, {
-        updatedAtFrom: fromIso,
-        updatedAtTo: toIso,
-      });
+      csv = await this.getTicketsCsv(tenantId, { updatedAtFrom: fromIso, updatedAtTo: toIso });
       filename = `izvestaj_tiketi_${dateStr}.csv`;
     } else if (reportType === 'devices') {
-      csv = await this.deviceService.exportCsv(tenantId, {
+      const deviceQuery: { createdAtFrom?: string; createdAtTo?: string; ids?: string[] } = {
         createdAtFrom: fromIso,
         createdAtTo: toIso,
-      });
+      };
+      if (dto.deviceIds?.length) deviceQuery.ids = dto.deviceIds;
+      csv = await this.deviceService.exportCsv(tenantId, deviceQuery);
       filename = `izvestaj_uredjaji_${dateStr}.csv`;
     } else {
       csv = await this.licenceService.exportCsv(tenantId, {});
       filename = `izvestaj_licence_${dateStr}.csv`;
     }
 
-    const typeLabel =
-      reportType === 'tickets' ? 'Tiketi' : reportType === 'devices' ? 'Uređaji' : 'Licence';
+    const typeLabel = reportType === 'tickets' ? 'Tiketi' : reportType === 'devices' ? 'Uređaji' : 'Licence';
     const subject = `Izveštaj: ${typeLabel} (${daysBack} dana unazad)`;
     const text = `Prilog: izveštaj za period ${start.toLocaleDateString()} – ${end.toLocaleDateString()}.\n\n— ProgramAI`;
 

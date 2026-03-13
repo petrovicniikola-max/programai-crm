@@ -54,10 +54,12 @@ export class LicenceService {
     const where: {
       tenantId: string;
       companyId?: string;
+      deviceId?: { in: string[] };
       status?: LicenceStatus;
       validTo?: { gte?: Date; lte?: Date };
     } = { tenantId };
     if (query.companyId) where.companyId = query.companyId;
+    if (query.deviceIds?.length) where.deviceId = { in: query.deviceIds };
     if (query.status) where.status = query.status as LicenceStatus;
     if (query.validFrom || query.validTo) {
       where.validTo = {};

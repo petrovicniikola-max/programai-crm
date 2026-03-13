@@ -55,11 +55,15 @@ export class DeviceService {
   async findAll(tenantId: string, query: ListDevicesQueryDto) {
     const where: {
       tenantId: string;
+      id?: { in: string[] };
       companyId?: string;
       status?: DeviceStatus;
       serialNo?: { contains: string; mode: 'insensitive' };
       createdAt?: { gte?: Date; lte?: Date };
     } = { tenantId };
+    if (query.ids && Array.isArray(query.ids) && query.ids.length > 0) {
+      where.id = { in: query.ids };
+    }
     if (query.companyId) where.companyId = query.companyId;
     if (query.status) where.status = query.status as DeviceStatus;
     if (query.search?.trim()) where.serialNo = { contains: query.search.trim(), mode: 'insensitive' };

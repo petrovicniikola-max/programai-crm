@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsEnum, IsString, IsISO8601 } from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsISO8601, IsArray } from 'class-validator';
 import { TicketStatus, TicketType } from '@prisma/client';
 
 export class TicketsExportQueryDto {
@@ -7,6 +7,12 @@ export class TicketsExportQueryDto {
   @IsOptional()
   @IsEnum(TicketStatus)
   status?: TicketStatus;
+
+  @ApiPropertyOptional({ enum: ['OPEN', 'IN_PROGRESS', 'DONE'], isArray: true })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(TicketStatus, { each: true })
+  statuses?: TicketStatus[];
 
   @ApiPropertyOptional({ enum: ['CALL', 'SUPPORT', 'SALES', 'FIELD', 'OTHER'] })
   @IsOptional()

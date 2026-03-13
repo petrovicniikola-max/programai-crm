@@ -1,8 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum, IsISO8601 } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsISO8601, IsArray } from 'class-validator';
 import { DeviceStatus } from '@prisma/client';
 
 export class ListDevicesQueryDto {
+  @ApiPropertyOptional({ type: [String], description: 'Limit results to specific device IDs' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  ids?: string[];
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

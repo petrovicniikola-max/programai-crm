@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsInt, IsDateString, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsDateString, Min, Max, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListLicencesQueryDto {
@@ -7,6 +7,12 @@ export class ListLicencesQueryDto {
   @IsOptional()
   @IsString()
   companyId?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Limit to licences for these device IDs' })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  deviceIds?: string[];
 
   @ApiPropertyOptional({ enum: ['ACTIVE', 'EXPIRED', 'SUSPENDED', 'CANCELLED'] })
   @IsOptional()

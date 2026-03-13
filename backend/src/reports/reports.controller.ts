@@ -92,11 +92,17 @@ export class ReportsController {
   @Post('alerts/execute')
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
-  @ApiOperation({ summary: 'Execute report now and send to saved emails (SUPER_ADMIN)' })
+  @ApiOperation({ summary: 'Execute report: executeAll=true runs per-email configs; otherwise single report to saved emails (SUPER_ADMIN)' })
   executeReport(
     @CurrentUser('tenantId') tenantId: string,
     @Body() dto: ExecuteReportDto,
   ) {
-    return this.reportsService.executeReport(tenantId, dto.reportType, dto.daysBack);
+    return this.reportsService.executeReport(tenantId, {
+      executeAll: dto.executeAll,
+      configIndex: dto.configIndex,
+      reportType: dto.reportType,
+      daysBack: dto.daysBack,
+      deviceIds: dto.deviceIds,
+    });
   }
 }
