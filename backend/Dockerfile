@@ -33,5 +33,6 @@ COPY --from=builder /app/prisma.config.ts ./
 
 EXPOSE 3001
 
-# Seed pa start. (migrate deploy izostavljen kad je baza već usklađena sa db push; za nove migracije pokrenuti ručno.)
-CMD ["sh", "-c", "node prisma/seed.js && node dist/src/main"]
+# Produkcija: ne pokreći seed na svaki start kontejnera, da ne bi pao ako je šema baze
+# već prilagođena ručno (db push / stare kolone). Seed se po potrebi pokreće ručno.
+CMD ["node", "dist/src/main"]
