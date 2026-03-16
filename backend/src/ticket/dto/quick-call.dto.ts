@@ -57,11 +57,30 @@ export class QuickCallDto {
   callDurationMinutes?: number;
 
   @ApiPropertyOptional({
-    description: 'Classification of conversation (for reporting/UX). SUPPORT or SALES. If omitted, ticket.type stays CALL.',
+    description: 'Quick Call: tip razgovora (Support/Prodaja). Ako nije poslato, ticket.type = CALL.',
     enum: ['SUPPORT', 'SALES'],
   })
   @IsOptional()
   @IsString()
   @IsIn(['SUPPORT', 'SALES'])
   conversationKind?: 'SUPPORT' | 'SALES';
+
+  @ApiPropertyOptional({
+    description: 'Outgoing Call: način kontakta PHONE ili EMAIL.',
+    enum: ['PHONE', 'EMAIL'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['PHONE', 'EMAIL'])
+  contactMethod?: 'PHONE' | 'EMAIL';
+
+  @ApiPropertyOptional({
+    description: 'Outgoing Call: koliko korisnika je kontaktirano.',
+    minimum: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  contactsContactedCount?: number;
 }

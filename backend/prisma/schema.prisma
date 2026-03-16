@@ -247,9 +247,11 @@ model Ticket {
   createdBy            User?           @relation("TicketCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   phoneRaw             String?
   contactName          String?
-  callOccurredAt       DateTime?
-  callDurationMinutes  Int?
-  reportedBy           String?         // Ko je prijavio (manual ticket)
+  callOccurredAt           DateTime?
+  callDurationMinutes      Int?
+  contactMethod            String?   // PHONE | EMAIL – način kontakta (za odlazne pozive)
+  contactsContactedCount   Int?      // Koliko korisnika je kontaktirano u tom unosu
+  reportedBy               String?         // Ko je prijavio (manual ticket)
   putIAngazovanje      Json?          // Put i angažovanje – array of strings (manual ticket)
   tokPrijave           String?        // Tok prijave (manual ticket)
   zakljucak            String?        // Zaključak (manual ticket)

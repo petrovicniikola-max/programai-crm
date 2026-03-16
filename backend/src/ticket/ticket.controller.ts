@@ -15,6 +15,8 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TicketTagIdsDto } from './dto/ticket-tags.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('tickets')
@@ -30,7 +32,9 @@ export class TicketController {
   ) {}
 
   @Post('quick-call')
-  @ApiOperation({ summary: 'Quick Call – create CALL ticket from phone; find or create contact' })
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT', 'SALES')
+  @ApiOperation({ summary: 'Quick Call / Outgoing Call – create CALL ticket; optional conversationKind (Quick) or contactMethod+contactsContactedCount (Outgoing)' })
   @ApiResponse({ status: 201, description: 'Returns ticket, contact, and company (or null).' })
   quickCall(
     @CurrentUser('tenantId') tenantId: string,

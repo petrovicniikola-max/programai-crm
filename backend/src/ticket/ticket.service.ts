@@ -17,13 +17,15 @@ export interface QuickCallResult {
 export class TicketService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** prefix 'T' = manual Create Ticket, 'Q' = Quick call */
-  private async nextKey(tenantId: string, prefix: 'T' | 'Q' = 'T', tx?: Prisma.TransactionClient): Promise<string> {
+  /** prefix 'T' = manual ticket, 'Q' = Quick call, 'O' = Outgoing call (Prodaja) */
+  private async nextKey(tenantId: string, prefix: 'T' | 'Q' | 'O' = 'T', tx?: Prisma.TransactionClient): Promise<string> {
     const prisma = tx ?? this.prisma;
     const count = await prisma.ticket.count({
       where: { tenantId, key: { startsWith: `${prefix}-` } },
     });
-    return `${prefix}-${String(count + 1).padStart(6, '0')}`;
+    const num = count + 1;
+    const pad = prefix === 'O' ? 5 : 6; // O-00001, Q-000001
+    return `${prefix}-${String(num).padStart(pad, '0')}`;
   }
 
   async create(tenantId: string, dto: CreateTicketDto, assigneeId?: string) {
@@ -65,6 +67,7 @@ export class TicketService {
     else if (q.assigneeId) where.assigneeId = q.assigneeId;
     if (q.createdByUserId) where.createdByUserId = q.createdByUserId;
     if (q.companyId) where.companyId = q.companyId;
+    if (q.keyStartsWith?.trim()) where.key = { startsWith: q.keyStartsWith.trim() };
     if (q.createdAtFrom || q.createdAtTo) {
       where.createdAt = {};
       if (q.createdAtFrom) (where.createdAt as Prisma.DateTimeFilter).gte = new Date(q.createdAtFrom);
@@ -138,8 +141,10 @@ export class TicketService {
         ...(dto.assigneeId !== undefined && { assigneeId: dto.assigneeId || null }),
         ...(dto.key !== undefined && { key: dto.key }),
         ...(dto.description !== undefined && { description: dto.description ?? null }),
-        ...(dto.callOccurredAt !== undefined && { callOccurredAt: new Date(dto.callOccurredAt) }),
+        ...(dto.callOccurredAt !== undefined && { callOccurredAt: dto.callOccurredAt ? new Date(dto.callOccurredAt) : null }),
         ...(dto.callDurationMinutes !== undefined && { callDurationMinutes: dto.callDurationMinutes }),
+        ...(dto.contactMethod !== undefined && { contactMethod: dto.contactMethod ?? null }),
+        ...(dto.contactsContactedCount !== undefined && { contactsContactedCount: dto.contactsContactedCount ?? null }),
       },
       include: { company: true, contact: true, assignee: true },
     });
@@ -377,7 +382,8 @@ export class TicketService {
       }
 
       const finalContactName = dto.contactName?.trim() || contact.name;
-      const key = await this.nextKey(tenantId, 'Q', tx);
+      const isOutgoingCall = dto.contactMethod != null || dto.contactsContactedCount != null;
+      const key = await this.nextKey(tenantId, isOutgoingCall ? 'O' : 'Q', tx);
 
       const callOccurredAt = dto.callOccurredAt ? new Date(dto.callOccurredAt) : new Date();
       const callDurationMinutes = dto.callDurationMinutes ?? null;
@@ -401,6 +407,8 @@ export class TicketService {
           contactName: finalContactName,
           callOccurredAt,
           callDurationMinutes,
+          contactMethod: dto.contactMethod ?? null,
+          contactsContactedCount: dto.contactsContactedCount ?? null,
         },
         include: {
           company: true,

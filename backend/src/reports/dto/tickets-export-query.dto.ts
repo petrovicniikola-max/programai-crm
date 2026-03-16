@@ -24,6 +24,11 @@ export class TicketsExportQueryDto {
   @IsString()
   assigneeId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by ticket creator (user id)' })
+  @IsOptional()
+  @IsString()
+  createdByUserId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

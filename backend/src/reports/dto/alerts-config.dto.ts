@@ -7,7 +7,7 @@ export type TicketStatusFilter = 'OPEN' | 'IN_PROGRESS' | 'DONE';
 export interface ReportEmailConfigItem {
   email: string;
   schedule: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  reportType: 'tickets' | 'devices' | 'licences';
+  reportType: 'tickets' | 'devices' | 'licences' | 'sales';
   /** For devices/licences: filter by company */
   companyId?: string;
   /** For devices: limit to these device IDs. For licences: limit to licences for these device IDs */
@@ -16,6 +16,10 @@ export interface ReportEmailConfigItem {
   ticketStatuses?: TicketStatusFilter[];
   /** For tickets: filter by assignee (user ID or 'unassigned') */
   assigneeId?: string;
+  /** For sales: filter by creator user ID */
+  salesCreatedByUserId?: string;
+  /** For sales: filter by contact method PHONE | EMAIL */
+  salesContactMethod?: 'PHONE' | 'EMAIL';
   /** Time of day HH:mm when report should be sent (e.g. 08:00) */
   scheduleTime?: string;
   /** For weekly: day of week 0=Sunday … 6=Saturday */
@@ -35,9 +39,19 @@ export class ReportEmailConfigItemDto {
   @IsEnum(['daily', 'weekly', 'monthly', 'yearly'])
   schedule!: 'daily' | 'weekly' | 'monthly' | 'yearly';
 
-  @ApiProperty({ enum: ['tickets', 'devices', 'licences'] })
-  @IsEnum(['tickets', 'devices', 'licences'])
-  reportType!: 'tickets' | 'devices' | 'licences';
+  @ApiProperty({ enum: ['tickets', 'devices', 'licences', 'sales'] })
+  @IsEnum(['tickets', 'devices', 'licences', 'sales'])
+  reportType!: 'tickets' | 'devices' | 'licences' | 'sales';
+
+  @ApiPropertyOptional({ description: 'For sales: filter by creator user ID' })
+  @IsOptional()
+  @IsString()
+  salesCreatedByUserId?: string;
+
+  @ApiPropertyOptional({ enum: ['PHONE', 'EMAIL'], description: 'For sales: način kontakta' })
+  @IsOptional()
+  @IsIn(['PHONE', 'EMAIL'])
+  salesContactMethod?: 'PHONE' | 'EMAIL';
 
   @ApiPropertyOptional()
   @IsOptional()

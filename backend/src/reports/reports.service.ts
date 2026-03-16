@@ -6,6 +6,7 @@ import { FormShareService } from '../forms/form-share.service';
 import { DeviceService } from '../device/device.service';
 import { LicenceService } from '../licence/licence.service';
 import { TicketsExportQueryDto } from './dto/tickets-export-query.dto';
+import { SalesExportQueryDto } from './dto/sales-export-query.dto';
 import type { ReportEmailConfigItem } from './dto/alerts-config.dto';
 
 export interface ReportsOverviewDto {
@@ -156,6 +157,7 @@ export class ReportsService {
     if (q.type) where.type = q.type;
     if (q.assigneeId === 'unassigned') where.assigneeId = null;
     else if (q.assigneeId) where.assigneeId = q.assigneeId;
+    if (q.createdByUserId) where.createdByUserId = q.createdByUserId;
     if (q.companyId) where.companyId = q.companyId;
     if (q.createdAtFrom || q.createdAtTo) {
       where.createdAt = {};
@@ -184,11 +186,58 @@ export class ReportsService {
     );
 
     const header =
-      'id,key,title,status,type,companyId,contactId,assigneeId,createdAt,updatedAt,callOccurredAt,callDurationMinutes';
+      'id,key,title,status,type,companyId,contactId,assigneeId,createdAt,updatedAt,callOccurredAt,callDurationMinutes,contactMethod,contactsContactedCount';
     const lines = rows.map(
       (r) =>
-        `${r.id},${escapeCsv(r.key)},${escapeCsv(r.title)},${r.status},${r.type},${r.companyId ?? ''},${r.contactId ?? ''},${r.assigneeId ?? ''},${r.createdAt.toISOString()},${r.updatedAt.toISOString()},${r.callOccurredAt?.toISOString() ?? ''},${r.callDurationMinutes ?? ''}`,
+        `${r.id},${escapeCsv(r.key)},${escapeCsv(r.title)},${r.status},${r.type},${r.companyId ?? ''},${r.contactId ?? ''},${r.assigneeId ?? ''},${r.createdAt.toISOString()},${r.updatedAt.toISOString()},${r.callOccurredAt?.toISOString() ?? ''},${r.callDurationMinutes ?? ''},${r.contactMethod ?? ''},${r.contactsContactedCount ?? ''}`,
     );
+    return [header, ...lines].join('\r\n');
+  }
+
+  async getSalesCsv(tenantId: string, q: SalesExportQueryDto): Promise<string> {
+    const where: Prisma.TicketWhereInput = { tenantId, key: { startsWith: 'O' } };
+    if (q.createdByUserId) where.createdByUserId = q.createdByUserId;
+    if (q.contactMethod) where.contactMethod = q.contactMethod;
+    if (q.createdAtFrom || q.createdAtTo) {
+      where.createdAt = {};
+      if (q.createdAtFrom) (where.createdAt as Prisma.DateTimeFilter).gte = new Date(q.createdAtFrom);
+      if (q.createdAtTo) (where.createdAt as Prisma.DateTimeFilter).lte = new Date(q.createdAtTo);
+    }
+
+    const rows = await this.prisma.ticket.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 10000,
+      include: {
+        company: { select: { name: true } },
+        createdBy: { select: { email: true, displayName: true } },
+      },
+    });
+
+    const createdRange =
+      q.createdAtFrom || q.createdAtTo ? `${q.createdAtFrom ?? '...'} -> ${q.createdAtTo ?? '...'}` : 'none';
+    // eslint-disable-next-line no-console
+    console.log(`[SalesCsv] tenant=${tenantId} createdAt=${createdRange} count=${rows.length}`);
+
+    const header =
+      'key,title,status,type,companyName,contactMethod,callOccurredAt,createdAt,createdByEmail,createdByDisplayName';
+    const lines = rows.map((r) => {
+      const creatorLabel = r.createdBy
+        ? (r.createdBy.displayName || r.createdBy.email || '')
+        : '';
+      return [
+        escapeCsv(r.key),
+        escapeCsv(r.title),
+        r.status,
+        r.type,
+        escapeCsv(r.company?.name ?? ''),
+        r.contactMethod ?? '',
+        r.callOccurredAt?.toISOString() ?? '',
+        r.createdAt.toISOString(),
+        escapeCsv(r.createdBy?.email ?? ''),
+        escapeCsv(creatorLabel),
+      ].join(',');
+    });
     return [header, ...lines].join('\r\n');
   }
 
@@ -249,6 +298,8 @@ export class ReportsService {
           deviceIds: Array.isArray(c.deviceIds) ? c.deviceIds.filter((id) => typeof id === 'string') : undefined,
           ticketStatuses: Array.isArray(c.ticketStatuses) ? c.ticketStatuses : undefined,
           assigneeId: c.assigneeId?.trim() || undefined,
+          salesCreatedByUserId: c.salesCreatedByUserId?.trim() || undefined,
+          salesContactMethod: c.salesContactMethod || undefined,
           scheduleTime: c.scheduleTime?.trim() || undefined,
           scheduleDayOfWeek: c.scheduleDayOfWeek,
           scheduleMonthOption: c.scheduleMonthOption,
@@ -358,12 +409,20 @@ export class ReportsService {
         createdAtFrom: string;
         createdAtTo: string;
         statuses?: ('OPEN' | 'IN_PROGRESS' | 'DONE')[];
-        assigneeId?: string;
+        createdByUserId?: string;
       } = { createdAtFrom: fromIso, createdAtTo: toIso };
       if (item.ticketStatuses?.length) ticketQuery.statuses = item.ticketStatuses;
-      if (item.assigneeId) ticketQuery.assigneeId = item.assigneeId;
+      if (item.assigneeId) ticketQuery.createdByUserId = item.assigneeId;
       csv = await this.getTicketsCsv(tenantId, ticketQuery);
       filename = `izvestaj_tiketi_${dateStr}.csv`;
+    } else if (item.reportType === 'sales') {
+      csv = await this.getSalesCsv(tenantId, {
+        createdAtFrom: fromIso,
+        createdAtTo: toIso,
+        createdByUserId: item.salesCreatedByUserId?.trim() || undefined,
+        contactMethod: item.salesContactMethod,
+      });
+      filename = `izvestaj_prodaja_${dateStr}.csv`;
     } else if (item.reportType === 'devices') {
       const deviceQuery: { createdAtFrom?: string; createdAtTo?: string; companyId?: string; ids?: string[] } = {
         createdAtFrom: fromIso,
@@ -385,7 +444,14 @@ export class ReportsService {
     // eslint-disable-next-line no-console
     console.log(`[Report] type=${item.reportType} period=${fromIso} -> ${toIso} rows=${rowCount}`);
 
-    const typeLabel = item.reportType === 'tickets' ? 'Tiketi' : item.reportType === 'devices' ? 'Uređaji' : 'Licence';
+    const typeLabel =
+      item.reportType === 'tickets'
+        ? 'Tiketi'
+        : item.reportType === 'sales'
+          ? 'Prodaja'
+          : item.reportType === 'devices'
+            ? 'Uređaji'
+            : 'Licence';
     const subject = `Izveštaj: ${typeLabel}`;
     const text = `Prilog: izveštaj za period ${start.toLocaleDateString()} – ${end.toLocaleDateString()}.\n\n— CRM ESTUAR`;
 

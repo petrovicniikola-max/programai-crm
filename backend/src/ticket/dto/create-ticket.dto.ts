@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, MinLength, IsOptional, IsEnum, IsInt, Min, IsISO8601, IsArray } from 'class-validator';
+import { IsString, MinLength, IsOptional, IsEnum, IsInt, Min, IsISO8601, IsArray, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TicketStatus, TicketType } from '@prisma/client';
 
@@ -60,6 +60,19 @@ export class CreateTicketDto {
   @IsInt()
   @Min(0)
   callDurationMinutes?: number;
+
+  @ApiPropertyOptional({ enum: ['PHONE', 'EMAIL'], description: 'Način kontakta (za odlazne pozive)' })
+  @IsOptional()
+  @IsString()
+  @IsIn(['PHONE', 'EMAIL'])
+  contactMethod?: 'PHONE' | 'EMAIL';
+
+  @ApiPropertyOptional({ description: 'Broj kontaktiranih korisnika', minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  contactsContactedCount?: number;
 
   @ApiPropertyOptional({ description: 'Ko je prijavio (ime firme ili korisnika)' })
   @IsOptional()

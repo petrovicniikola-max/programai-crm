@@ -29,6 +29,11 @@ export class TicketListQueryDto {
   @IsString()
   companyId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by key prefix (e.g. O for Outgoing Call / Prodaja)' })
+  @IsOptional()
+  @IsString()
+  keyStartsWith?: string;
+
   @ApiPropertyOptional({ description: 'Created at from (ISO date)' })
   @IsOptional()
   @IsISO8601()

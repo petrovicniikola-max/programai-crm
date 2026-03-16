@@ -5,6 +5,7 @@ import { ReportsService } from './reports.service';
 import { TicketService } from '../ticket/ticket.service';
 import { TicketListQueryDto } from '../ticket/dto/ticket-list-query.dto';
 import { TicketsExportQueryDto } from './dto/tickets-export-query.dto';
+import { SalesExportQueryDto } from './dto/sales-export-query.dto';
 import { PatchAlertsConfigDto } from './dto/alerts-config.dto';
 import { ExecuteReportDto } from './dto/execute-report.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -48,6 +49,20 @@ export class ReportsController {
   ) {
     const csv = await this.reportsService.getTicketsCsv(tenantId, query);
     const filename = `tickets_${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  }
+
+  @Get('sales/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @ApiOperation({ summary: 'Export Prodaja (Outgoing Call) tickets as CSV' })
+  async exportSalesCsv(
+    @CurrentUser('tenantId') tenantId: string,
+    @Res() res: Response,
+    @Query() query: SalesExportQueryDto,
+  ) {
+    const csv = await this.reportsService.getSalesCsv(tenantId, query);
+    const filename = `prodaja_${new Date().toISOString().slice(0, 10)}.csv`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csv);
   }
