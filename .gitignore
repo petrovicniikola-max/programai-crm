@@ -7,6 +7,8 @@ backend/node_modules/
 .env.*
 backend/.env
 backend/.env.*
+deploy_key
+deploy_key.pub
 
 # Uploads (tenant files)
 backend/uploads/

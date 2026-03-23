@@ -94,6 +94,7 @@ model Tenant {
   licenceEvents  LicenceEvent[]
   licenceNotificationLogs LicenceNotificationLog[]
   domains        TenantDomain[]
+  salesDirectoryRows SalesDirectoryRow[]
 }
 
 model TenantDomain {
@@ -118,12 +119,12 @@ model TenantSettings {
   emailSignature          String?
   emailFromName           String?
   emailFromAddress        String?
-  emailProvider           String?  // 'GOOGLE' | 'M365' – za SMTP
+  emailProvider           String?  // 'GOOGLE' | 'M365' â€“ za SMTP
   emailPassword           String?  // App password / lozinka za slanje (nikad u odgovoru)
   notificationsDaysBefore Json?
-  reportSchedule          String?  // 'none' | 'daily' | 'weekly' – automatski izveštaj (legacy)
-  reportEmails            Json?    // string[] – primaoci izveštaja (legacy)
-  reportEmailConfigs       Json?    // ReportEmailConfig[] – per-email: period, tip izveštaja, kompanija, uređaji
+  reportSchedule          String?  // 'none' | 'daily' | 'weekly' â€“ automatski izveĹˇtaj (legacy)
+  reportEmails            Json?    // string[] â€“ primaoci izveĹˇtaja (legacy)
+  reportEmailConfigs       Json?    // ReportEmailConfig[] â€“ per-email: period, tip izveĹˇtaja, kompanija, ureÄ‘aji
   jwtAccessTtlMinutes     Int?     @default(10080)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -188,7 +189,7 @@ model Company {
   devices    Device[]
   licences   Licence[]
   users      User[]
-  // Dodaci (add-ons) – lampice aktivno/neaktivno
+  // Dodaci (add-ons) â€“ lampice aktivno/neaktivno
   addOnViewInvoicesAllDevices Boolean @default(false)
   addOnLastInvoice            Boolean @default(false)
   addOnAlarmsEmail            Boolean @default(false)
@@ -197,6 +198,35 @@ model Company {
   addOnReportScheduling       Boolean @default(false)
 
   @@unique([tenantId, key])
+}
+
+model SalesDirectoryRow {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  externalKey    String
+  mb             String?
+  pib            String?
+  establishedAt  DateTime?
+  companyName    String?
+  city           String?
+  postalCode     String?
+  address        String?
+  phone          String?
+  legalForm      String?
+  activityCode   String?
+  activityName   String?
+  aprStatus      String?
+  email          String?
+  representative String?
+  description    String?
+  sizeClass      String?
+  fieldColors    Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, externalKey])
+  @@index([tenantId, updatedAt])
 }
 
 model Contact {
@@ -249,13 +279,13 @@ model Ticket {
   contactName          String?
   callOccurredAt           DateTime?
   callDurationMinutes      Int?
-  contactMethod            String?   // PHONE | EMAIL – način kontakta (za odlazne pozive)
+  contactMethod            String?   // PHONE | EMAIL â€“ naÄŤin kontakta (za odlazne pozive)
   contactsContactedCount   Int?      // Koliko korisnika je kontaktirano u tom unosu
   reportedBy               String?         // Ko je prijavio (manual ticket)
-  putIAngazovanje      Json?          // Put i angažovanje – array of strings (manual ticket)
+  putIAngazovanje      Json?          // Put i angaĹľovanje â€“ array of strings (manual ticket)
   tokPrijave           String?        // Tok prijave (manual ticket)
-  zakljucak            String?        // Zaključak (manual ticket)
-  potpisOvlascenogLica  String?        // Potpis ovlašćenog lica (manual ticket)
+  zakljucak            String?        // ZakljuÄŤak (manual ticket)
+  potpisOvlascenogLica  String?        // Potpis ovlaĹˇÄ‡enog lica (manual ticket)
   ticketDate           DateTime?      // Datum na formi (manual ticket)
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
@@ -471,13 +501,13 @@ model Device {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
   licences   Licence[]
-  // Meta / podešavanja uređaja
+  // Meta / podeĹˇavanja ureÄ‘aja
   testDevice           Boolean @default(false)
   dpu                  Boolean @default(false)
   sufEnvironment       String? // produkciono, test, itd.
   eFakturaEnvironment   String?
   paymentType          String?
-  accountSync          String? // isključena, uključena
+  accountSync          String? // iskljuÄŤena, ukljuÄŤena
   teronPaymentGateway  Boolean @default(false)
   mdmProfileName       String?
 
@@ -538,3 +568,4 @@ model LicenceNotificationLog {
   @@unique([tenantId, licenceId, daysBefore, triggerDate])
   @@index([tenantId, createdAt])
 }
+
