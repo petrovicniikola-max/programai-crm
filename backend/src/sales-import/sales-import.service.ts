@@ -256,6 +256,12 @@ export class SalesImportService {
     });
   }
 
+  async getOne(tenantId: string, id: string) {
+    return this.prisma.salesDirectoryRow.findFirst({
+      where: { tenantId, id },
+    });
+  }
+
   async exportRows(
     tenantId: string,
     format: 'csv' | 'xlsx',
@@ -263,7 +269,6 @@ export class SalesImportService {
     const rows = await this.prisma.salesDirectoryRow.findMany({
       where: { tenantId },
       orderBy: { updatedAt: 'desc' },
-      take: 10000,
     });
 
     if (format === 'csv') {
