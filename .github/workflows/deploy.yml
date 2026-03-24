@@ -24,7 +24,7 @@ jobs:
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "${SERVER_USER}@${SERVER_HOST}" '
             set -e
-            COMPOSE="docker compose -p programai -f /opt/docker-compose.prod.yml --env-file /opt/.env"
+            COMPOSE="docker compose -p opt -f /opt/docker-compose.prod.yml --env-file /opt/.env"
             echo "→ Pull programai-crm..."
             cd /opt/programai-crm && git pull origin main
             echo "→ Pull programai-frontend..."
