@@ -25,6 +25,10 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new "${SERVER_USER}@${SERVER_HOST}" '
             set -e
             COMPOSE="docker compose -p opt -f /opt/docker-compose.prod.yml --env-file /opt/.env"
+            LOCKDIR="/tmp/programai-deploy.lockdir"
+            echo "→ Waiting for deploy lock..."
+            while ! mkdir "$LOCKDIR" 2>/dev/null; do sleep 2; done
+            trap "rmdir \"$LOCKDIR\"" EXIT
             echo "→ Pull programai-crm..."
             cd /opt/programai-crm && git pull origin main
             echo "→ Pull programai-frontend..."
