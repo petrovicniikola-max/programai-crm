@@ -92,9 +92,16 @@ export class SalesImportController {
     @CurrentUser('tenantId') tenantId: string,
     @Res() res: Response,
     @Query('format') format: 'csv' | 'xlsx' = 'csv',
+    @Query('contactDateFrom') contactDateFrom?: string,
+    @Query('contactDateTo') contactDateTo?: string,
   ) {
     const safeFormat = format === 'xlsx' ? 'xlsx' : 'csv';
-    const data = await this.salesImportService.exportRows(tenantId, safeFormat);
+    const data = await this.salesImportService.exportRows(
+      tenantId,
+      safeFormat,
+      contactDateFrom,
+      contactDateTo,
+    );
     const date = new Date().toISOString().slice(0, 10);
     const filename = `prodaja_mails_pozivi_${date}.${safeFormat}`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

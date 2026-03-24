@@ -270,9 +270,25 @@ export class SalesImportService {
   async exportRows(
     tenantId: string,
     format: 'csv' | 'xlsx',
+    contactDateFrom?: string,
+    contactDateTo?: string,
   ): Promise<Buffer | string> {
+    const where: Prisma.SalesDirectoryRowWhereInput = { tenantId };
+    if (contactDateFrom || contactDateTo) {
+      const range: { gte?: Date; lte?: Date } = {};
+      if (contactDateFrom) {
+        const from = new Date(contactDateFrom);
+        if (!Number.isNaN(from.getTime())) range.gte = from;
+      }
+      if (contactDateTo) {
+        const to = new Date(contactDateTo);
+        if (!Number.isNaN(to.getTime())) range.lte = to;
+      }
+      if (range.gte || range.lte) where.contactDate = range;
+    }
+
     const rows = await this.prisma.salesDirectoryRow.findMany({
-      where: { tenantId },
+      where,
       orderBy: { updatedAt: 'desc' },
     });
 
