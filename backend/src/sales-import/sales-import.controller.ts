@@ -4,6 +4,8 @@ import {
   Controller,
   Get,
   Header,
+  Patch,
+  Param,
   Post,
   Query,
   Res,
@@ -12,7 +14,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
@@ -57,8 +64,29 @@ export class SalesImportController {
     return this.salesImportService.importFile(tenantId, file, userId);
   }
 
+  @Post('manual')
+  @ApiOperation({ summary: 'Create one sales directory row manually' })
+  createManual(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() dto: Record<string, unknown>,
+  ) {
+    return this.salesImportService.createManual(tenantId, dto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Edit one sales directory row' })
+  updateRow(
+    @CurrentUser('tenantId') tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: Record<string, unknown>,
+  ) {
+    return this.salesImportService.updateRow(tenantId, id, dto);
+  }
+
   @Get('export')
-  @ApiOperation({ summary: 'Export imported sales directory rows as CSV or XLSX' })
+  @ApiOperation({
+    summary: 'Export imported sales directory rows as CSV or XLSX',
+  })
   @Header('Content-Type', 'application/octet-stream')
   async exportRows(
     @CurrentUser('tenantId') tenantId: string,
@@ -79,4 +107,3 @@ export class SalesImportController {
     res.send(data);
   }
 }
-
