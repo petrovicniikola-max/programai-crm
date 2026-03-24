@@ -30,8 +30,11 @@ jobs:
             echo "→ Pull programai-frontend..."
             cd /opt/programai-frontend && git pull origin main
             echo "→ Cleanup stale containers..."
+            docker rm -f programai_backend programai_frontend programai_postgres programai_redis 2>/dev/null || true
             docker ps -aq --filter "name=_programai_backend$" | xargs -r docker rm -f || true
             docker ps -aq --filter "name=_programai_frontend$" | xargs -r docker rm -f || true
+            docker ps -aq --filter "name=_programai_postgres$" | xargs -r docker rm -f || true
+            docker ps -aq --filter "name=_programai_redis$" | xargs -r docker rm -f || true
             echo "→ Build and restart containers..."
             $COMPOSE down --remove-orphans || true
             $COMPOSE build --no-cache
