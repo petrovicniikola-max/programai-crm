@@ -83,12 +83,6 @@ export class SalesImportController {
     return this.salesImportService.updateRow(tenantId, id, dto);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get one sales directory row by id' })
-  getOne(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
-    return this.salesImportService.getOne(tenantId, id);
-  }
-
   @Get('export')
   @ApiOperation({
     summary: 'Export imported sales directory rows as CSV or XLSX',
@@ -111,5 +105,11 @@ export class SalesImportController {
         : 'text/csv; charset=utf-8',
     );
     res.send(data);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get one sales directory row by id' })
+  getOne(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
+    return this.salesImportService.getOne(tenantId, id);
   }
 }

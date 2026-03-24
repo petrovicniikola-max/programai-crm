@@ -221,6 +221,7 @@ model SalesDirectoryRow {
   representative String?
   description    String?
   sizeClass      String?
+  contactDate    DateTime?
   fieldColors    Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

@@ -21,6 +21,7 @@ type SalesDirectoryRowInput = {
   representative?: string;
   description?: string;
   sizeClass?: string;
+  contactDate?: Date;
   fieldColors?: Record<string, string>;
 };
 
@@ -43,6 +44,7 @@ const HEADER_MAP: Record<string, keyof SalesDirectoryRowInput> = {
   opis: 'description',
   'polu/mali': 'sizeClass',
   'polu mali': 'sizeClass',
+  datum: 'contactDate',
 };
 
 const EXPORT_COLUMNS: { key: keyof SalesDirectoryRowInput; header: string }[] =
@@ -62,7 +64,8 @@ const EXPORT_COLUMNS: { key: keyof SalesDirectoryRowInput; header: string }[] =
     { key: 'email', header: 'Email' },
     { key: 'representative', header: 'Zastupnik' },
     { key: 'description', header: 'Opis' },
-    { key: 'sizeClass', header: 'Polu/mali' },
+    { key: 'sizeClass', header: 'Poziv/mail' },
+    { key: 'contactDate', header: 'Datum' },
   ];
 
 const FILTERABLE_FIELDS = new Set([
@@ -148,6 +151,8 @@ export class SalesImportService {
       out.description = normalizeText(dto.description);
     if (dto.sizeClass !== undefined)
       out.sizeClass = normalizeText(dto.sizeClass);
+    if (dto.contactDate !== undefined)
+      out.contactDate = parseDateValue(dto.contactDate);
     if (dto.fieldColors !== undefined)
       out.fieldColors = dto.fieldColors as Record<string, string>;
     return out;
@@ -280,7 +285,11 @@ export class SalesImportService {
               ? r.establishedAt
                 ? r.establishedAt.toISOString().slice(0, 10)
                 : ''
-              : ((r as Record<string, unknown>)[key] ?? '');
+              : key === 'contactDate'
+                ? r.contactDate
+                  ? r.contactDate.toISOString().slice(0, 10)
+                  : ''
+                : ((r as Record<string, unknown>)[key] ?? '');
           const str = String(value);
           return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
         }).join(','),
@@ -294,9 +303,9 @@ export class SalesImportService {
     rows.forEach((r) => {
       const rowValues = EXPORT_COLUMNS.map(({ key }) => {
         if (key === 'establishedAt')
-          return r.establishedAt
-            ? r.establishedAt.toISOString().slice(0, 10)
-            : '';
+          return r.establishedAt ? r.establishedAt.toISOString().slice(0, 10) : '';
+        if (key === 'contactDate')
+          return r.contactDate ? r.contactDate.toISOString().slice(0, 10) : '';
         return (r as Record<string, unknown>)[key] ?? '';
       });
       const xRow = ws.addRow(rowValues);
@@ -330,6 +339,7 @@ export class SalesImportService {
         const field = HEADER_MAP[normalizeHeader(k)];
         if (!field) continue;
         if (field === 'establishedAt') row.establishedAt = parseDateValue(v);
+        else if (field === 'contactDate') row.contactDate = parseDateValue(v);
         else (row[field] as unknown) = normalizeText(v);
       }
       return row;
@@ -360,6 +370,9 @@ export class SalesImportService {
         if (field === 'establishedAt') {
           if (value instanceof Date) item.establishedAt = value;
           else item.establishedAt = parseDateValue(cell.text || value);
+        } else if (field === 'contactDate') {
+          if (value instanceof Date) item.contactDate = value;
+          else item.contactDate = parseDateValue(cell.text || value);
         } else {
           (item[field] as unknown) = normalizeText(cell.text || value);
         }

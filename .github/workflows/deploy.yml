@@ -33,6 +33,8 @@ jobs:
             cd /opt && docker compose -f docker-compose.prod.yml --env-file .env up -d
             echo "→ Prisma migrate deploy..."
             docker exec programai_backend npx prisma migrate deploy || true
+            echo "→ Prisma db push (schema sync fallback)..."
+            docker exec programai_backend npx prisma db push || true
             echo "→ Done."
             cd /opt && docker compose -f docker-compose.prod.yml ps
           '
