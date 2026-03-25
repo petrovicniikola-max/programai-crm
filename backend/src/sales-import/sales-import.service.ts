@@ -132,6 +132,16 @@ function parseDateValue(v: unknown): Date | undefined {
     return Number.isNaN(dt.getTime()) ? undefined : dt;
   }
 
+  // dd/MM/yyyy fallback
+  const m3 = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m3) {
+    const day = Number(m3[1]);
+    const month = Number(m3[2]);
+    const year = Number(m3[3]);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    return Number.isNaN(dt.getTime()) ? undefined : dt;
+  }
+
   return undefined;
 }
 
@@ -147,6 +157,18 @@ function colorFromArgb(argb?: string): string | undefined {
   if (!argb) return undefined;
   const hex = argb.length >= 6 ? argb.slice(-6) : argb;
   return /^([A-Fa-f0-9]{6})$/.test(hex) ? `#${hex.toUpperCase()}` : undefined;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function formatDateDdMmYyyy(d?: Date | null): string {
+  if (!d) return '';
+  const day = d.getUTCDate();
+  const month = d.getUTCMonth() + 1;
+  const year = d.getUTCFullYear();
+  return `${pad2(day)}/${pad2(month)}/${year}`;
 }
 
 function externalKey(row: SalesDirectoryRowInput): string {
@@ -333,11 +355,11 @@ export class SalesImportService {
           const value =
             key === 'establishedAt'
               ? r.establishedAt
-                ? r.establishedAt.toISOString().slice(0, 10)
+                ? formatDateDdMmYyyy(r.establishedAt)
                 : ''
               : key === 'contactDate'
                 ? r.contactDate
-                  ? r.contactDate.toISOString().slice(0, 10)
+                  ? formatDateDdMmYyyy(r.contactDate)
                   : ''
                 : ((r as Record<string, unknown>)[key] ?? '');
           const str = String(value);
@@ -353,9 +375,9 @@ export class SalesImportService {
     rows.forEach((r) => {
       const rowValues = EXPORT_COLUMNS.map(({ key }) => {
         if (key === 'establishedAt')
-          return r.establishedAt ? r.establishedAt.toISOString().slice(0, 10) : '';
+          return r.establishedAt ? formatDateDdMmYyyy(r.establishedAt) : '';
         if (key === 'contactDate')
-          return r.contactDate ? r.contactDate.toISOString().slice(0, 10) : '';
+          return r.contactDate ? formatDateDdMmYyyy(r.contactDate) : '';
         return (r as Record<string, unknown>)[key] ?? '';
       });
       const xRow = ws.addRow(rowValues);
