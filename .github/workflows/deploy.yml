@@ -46,7 +46,7 @@ jobs:
             echo "→ Prisma migrate deploy..."
             docker exec programai_backend npx prisma migrate deploy || true
             echo "→ Prisma db push (schema sync fallback)..."
-            docker exec programai_backend npx prisma db push || true
+            docker exec programai_backend npx prisma db push
             echo "→ Done."
             $COMPOSE ps
           '
