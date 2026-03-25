@@ -125,7 +125,9 @@ function parseDateValue(v: unknown): Date | undefined {
   if (!Number.isNaN(iso.getTime())) return iso;
 
   // dd.MM.yyyy, dd/MM/yyyy, dd-MM-yyyy (e.g. 24.03.2026 or 24/03/2026)
-  const m = text.match(/^(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{2,4})$/);
+  // U realnim Excel fajlovima često postoji i dodatak vremena ("24/03/2026 00:00")
+  // pa ne zahtevamo kraj stringa.
+  const m = text.match(/^(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{2,4})/);
   if (m) {
     const day = Number(m[1]);
     const month = Number(m[2]);
