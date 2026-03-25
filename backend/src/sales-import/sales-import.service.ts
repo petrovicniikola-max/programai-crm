@@ -92,9 +92,21 @@ function normalizeHeader(input: string): string {
   return input
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u00A0/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+function mapHeaderToField(normHeader: string): keyof SalesDirectoryRowInput | undefined {
+  const direct = HEADER_MAP[normHeader];
+  if (direct) return direct;
+
+  // Tolerant matching for slightly different headers (spaces, suffixes, etc.)
+  if (normHeader.startsWith('datum')) return 'contactDate';
+  if (normHeader.includes('poziv') && normHeader.includes('mail')) return 'sizeClass';
+
+  return undefined;
 }
 
 function normalizeText(v: unknown): string | undefined {
@@ -112,32 +124,13 @@ function parseDateValue(v: unknown): Date | undefined {
   const iso = new Date(text);
   if (!Number.isNaN(iso.getTime())) return iso;
 
-  // dd.MM.yyyy (e.g. 24.03.2026)
-  const m = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  // dd.MM.yyyy, dd/MM/yyyy, dd-MM-yyyy (e.g. 24.03.2026 or 24/03/2026)
+  const m = text.match(/^(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{2,4})$/);
   if (m) {
     const day = Number(m[1]);
     const month = Number(m[2]);
-    const year = Number(m[3]);
-    const dt = new Date(Date.UTC(year, month - 1, day));
-    return Number.isNaN(dt.getTime()) ? undefined : dt;
-  }
-
-  // dd-MM-yyyy fallback
-  const m2 = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if (m2) {
-    const day = Number(m2[1]);
-    const month = Number(m2[2]);
-    const year = Number(m2[3]);
-    const dt = new Date(Date.UTC(year, month - 1, day));
-    return Number.isNaN(dt.getTime()) ? undefined : dt;
-  }
-
-  // dd/MM/yyyy fallback
-  const m3 = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m3) {
-    const day = Number(m3[1]);
-    const month = Number(m3[2]);
-    const year = Number(m3[3]);
+    let year = Number(m[3]);
+    if (year < 100) year = year + (year < 70 ? 2000 : 1900);
     const dt = new Date(Date.UTC(year, month - 1, day));
     return Number.isNaN(dt.getTime()) ? undefined : dt;
   }
@@ -408,7 +401,7 @@ export class SalesImportService {
     return records.map((record) => {
       const row: SalesDirectoryRowInput = {};
       for (const [k, v] of Object.entries(record)) {
-        const field = HEADER_MAP[normalizeHeader(k)];
+        const field = mapHeaderToField(normalizeHeader(k));
         if (!field) continue;
         if (field === 'establishedAt') row.establishedAt = parseDateValue(v);
         else if (field === 'contactDate') row.contactDate = parseDateValue(v);
@@ -427,7 +420,7 @@ export class SalesImportService {
     const headerRow = ws.getRow(1);
     const colToField = new Map<number, keyof SalesDirectoryRowInput>();
     headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-      const field = HEADER_MAP[normalizeHeader(String(cell.text ?? ''))];
+      const field = mapHeaderToField(normalizeHeader(String(cell.text ?? '')));
       if (field) colToField.set(colNumber, field);
     });
 
