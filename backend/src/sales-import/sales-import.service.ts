@@ -44,6 +44,8 @@ const HEADER_MAP: Record<string, keyof SalesDirectoryRowInput> = {
   opis: 'description',
   'polu/mali': 'sizeClass',
   'polu mali': 'sizeClass',
+  'poziv/mail': 'sizeClass',
+  'poziv mail': 'sizeClass',
   datum: 'contactDate',
 };
 
@@ -90,6 +92,7 @@ function normalizeHeader(input: string): string {
   return input
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
 }
@@ -105,7 +108,38 @@ function parseDateValue(v: unknown): Date | undefined {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? undefined : v;
   const text = String(v).trim();
   if (!text) return undefined;
-  const dt = new Date(text);
+  // ISO / RFC3339
+  const iso = new Date(text);
+  if (!Number.isNaN(iso.getTime())) return iso;
+
+  // dd.MM.yyyy (e.g. 24.03.2026)
+  const m = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) {
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    return Number.isNaN(dt.getTime()) ? undefined : dt;
+  }
+
+  // dd-MM-yyyy fallback
+  const m2 = text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (m2) {
+    const day = Number(m2[1]);
+    const month = Number(m2[2]);
+    const year = Number(m2[3]);
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    return Number.isNaN(dt.getTime()) ? undefined : dt;
+  }
+
+  return undefined;
+}
+
+function excelSerialToDate(serial: number): Date | undefined {
+  if (!Number.isFinite(serial)) return undefined;
+  // Excel serial dates are days since 1899-12-30 (1900 system)
+  const utcMillis = Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000;
+  const dt = new Date(utcMillis);
   return Number.isNaN(dt.getTime()) ? undefined : dt;
 }
 
@@ -385,9 +419,11 @@ export class SalesImportService {
         const value = cell.value as unknown;
         if (field === 'establishedAt') {
           if (value instanceof Date) item.establishedAt = value;
+          else if (typeof value === 'number') item.establishedAt = excelSerialToDate(value);
           else item.establishedAt = parseDateValue(cell.text || value);
         } else if (field === 'contactDate') {
           if (value instanceof Date) item.contactDate = value;
+          else if (typeof value === 'number') item.contactDate = excelSerialToDate(value);
           else item.contactDate = parseDateValue(cell.text || value);
         } else {
           (item[field] as unknown) = normalizeText(cell.text || value);
