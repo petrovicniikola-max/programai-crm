@@ -237,7 +237,7 @@ export class SalesImportService {
     const [items, total] = await Promise.all([
       this.prisma.salesDirectoryRow.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ contactDate: 'desc' }, { createdAt: 'desc' }, { updatedAt: 'desc' }],
         skip,
         take,
       }),
@@ -340,7 +340,7 @@ export class SalesImportService {
 
     const rows = await this.prisma.salesDirectoryRow.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ contactDate: 'desc' }, { createdAt: 'desc' }, { updatedAt: 'desc' }],
     });
 
     if (format === 'csv') {
