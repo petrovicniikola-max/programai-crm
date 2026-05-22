@@ -1,4 +1,4 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import * as path from 'path';
@@ -17,6 +17,7 @@ import { TagModule } from './tag/tag.module';
 import { SettingsModule } from './settings/settings.module';
 import { FormsModule } from './forms/forms.module';
 import { DeviceModule } from './device/device.module';
+import { DistributorModule } from './distributor/distributor.module';
 import { LicenceModule } from './licence/licence.module';
 import { PlatformModule } from './platform/platform.module';
 import { PublicModule } from './public/public.module';
@@ -58,6 +59,7 @@ const redisEnabled = process.env.REDIS_ENABLED === 'true';
     SettingsModule,
     FormsModule,
     DeviceModule,
+    DistributorModule,
     LicenceModule.forRoot(),
     PlatformModule,
     PublicModule,

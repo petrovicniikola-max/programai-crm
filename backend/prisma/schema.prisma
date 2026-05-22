@@ -95,6 +95,7 @@ model Tenant {
   licenceNotificationLogs LicenceNotificationLog[]
   domains        TenantDomain[]
   salesDirectoryRows SalesDirectoryRow[]
+  distributors       Distributor[]
 }
 
 model TenantDomain {
@@ -488,12 +489,27 @@ model FormAnswer {
   @@index([tenantId, questionId])
 }
 
+model Distributor {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  devices   Device[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, name])
+}
+
 model Device {
   id         String       @id @default(cuid())
   tenantId   String
   tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   companyId  String?
   company    Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  distributorId String?
+  distributor   Distributor? @relation(fields: [distributorId], references: [id], onDelete: SetNull)
   name       String?
   model      String?
   serialNo   String?

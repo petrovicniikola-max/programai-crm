@@ -14,6 +14,11 @@ export class ListDevicesQueryDto {
   @IsString()
   companyId?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  distributorId?: string;
+
   @ApiPropertyOptional({ enum: ['ACTIVE', 'INACTIVE', 'RETIRED'] })
   @IsOptional()
   @IsEnum(DeviceStatus)

@@ -25,6 +25,7 @@ export class DeviceService {
       data: {
         tenantId,
         companyId: dto.companyId || null,
+        distributorId: dto.distributorId || null,
         name: dto.name?.trim() || null,
         model: dto.model?.trim() || null,
         serialNo,
@@ -39,7 +40,7 @@ export class DeviceService {
         teronPaymentGateway: dto.teronPaymentGateway ?? false,
         mdmProfileName: dto.mdmProfileName?.trim() || null,
       },
-      include: { company: true },
+      include: { company: true, distributor: true },
     });
     await this.audit.log({
       tenantId,
@@ -57,16 +58,27 @@ export class DeviceService {
       tenantId: string;
       id?: { in: string[] };
       companyId?: string;
+      distributorId?: string;
       status?: DeviceStatus;
-      serialNo?: { contains: string; mode: 'insensitive' };
+      OR?: Array<Record<string, unknown>>;
       createdAt?: { gte?: Date; lte?: Date };
     } = { tenantId };
     if (query.ids && Array.isArray(query.ids) && query.ids.length > 0) {
       where.id = { in: query.ids };
     }
     if (query.companyId) where.companyId = query.companyId;
+    if (query.distributorId) where.distributorId = query.distributorId;
     if (query.status) where.status = query.status as DeviceStatus;
-    if (query.search?.trim()) where.serialNo = { contains: query.search.trim(), mode: 'insensitive' };
+    const search = query.search?.trim();
+    if (search) {
+      where.OR = [
+        { serialNo: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { model: { contains: search, mode: 'insensitive' } },
+        { company: { name: { contains: search, mode: 'insensitive' } } },
+        { distributor: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
     if (query.createdAtFrom || query.createdAtTo) {
       where.createdAt = {};
       if (query.createdAtFrom) where.createdAt.gte = new Date(query.createdAtFrom);
@@ -74,7 +86,7 @@ export class DeviceService {
     }
     return this.prisma.device.findMany({
       where,
-      include: { company: true },
+      include: { company: true, distributor: true },
       orderBy: { updatedAt: 'desc' },
     });
   }
@@ -82,7 +94,7 @@ export class DeviceService {
   async findOne(tenantId: string, id: string) {
     const device = await this.prisma.device.findFirst({
       where: { id, tenantId },
-      include: { company: true },
+      include: { company: true, distributor: true },
     });
     if (!device) throw new NotFoundException('Device not found');
     return device;
@@ -103,6 +115,7 @@ export class DeviceService {
     }
     const data: Record<string, unknown> = {};
     if (dto.companyId !== undefined) data.companyId = dto.companyId || null;
+    if (dto.distributorId !== undefined) data.distributorId = dto.distributorId || null;
     if (dto.name !== undefined) data.name = dto.name?.trim() || null;
     if (dto.model !== undefined) data.model = dto.model?.trim() || null;
     if (dto.serialNo !== undefined) data.serialNo = serialNo ?? undefined;
@@ -119,7 +132,7 @@ export class DeviceService {
     const device = await this.prisma.device.update({
       where: { id },
       data: data as object,
-      include: { company: true },
+      include: { company: true, distributor: true },
     });
     await this.audit.log({
       tenantId,
@@ -164,12 +177,14 @@ export class DeviceService {
   /** CSV export with same filters as findAll */
   async exportCsv(tenantId: string, query: ListDevicesQueryDto): Promise<string> {
     const devices = await this.findAll(tenantId, query);
-    const header = 'companyId,companyName,name,model,serialNo,status,notes,createdAt,updatedAt';
+    const header =
+      'companyId,companyName,distributorName,name,model,serialNo,status,notes,createdAt,updatedAt';
     const lines = devices.map(
       (d) =>
         [
           d.companyId ?? '',
           escapeCsv(d.company?.name ?? ''),
+          escapeCsv(d.distributor?.name ?? ''),
           escapeCsv(d.name ?? ''),
           escapeCsv(d.model ?? ''),
           escapeCsv(d.serialNo ?? ''),
@@ -184,8 +199,9 @@ export class DeviceService {
 
   /** CSV template for import (header + one example row) */
   getImportTemplateCsv(): string {
-    const header = 'companyId,companyName,name,model,serialNo,status,notes';
-    const example = ',Moja Kompanija,Primer uređaj,Model X,SN001,ACTIVE,Primer napomena';
+    const header = 'companyId,companyName,distributorName,name,model,serialNo,status,notes';
+    const example =
+      ',Moja Kompanija,Moj Distributer,Primer uređaj,Model X,SN001,ACTIVE,Primer napomena';
     return [header, example].join('\r\n');
   }
 
@@ -195,7 +211,7 @@ export class DeviceService {
     userId: string,
     fileBuffer: Buffer,
   ): Promise<{ created: number; errors: { row: number; message: string }[] }> {
-    const MAX_ROWS = 500;
+    const MAX_ROWS = 25000;
     const errors: { row: number; message: string }[] = [];
     let created = 0;
     const raw = fileBuffer.toString('utf-8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -216,6 +232,7 @@ export class DeviceService {
     const idx = {
       companyId: col('companyId'),
       companyName: col('companyName'),
+      distributorName: col('distributorName'),
       name: col('name'),
       model: col('model'),
       serialNo: col('serialNo'),
@@ -231,6 +248,7 @@ export class DeviceService {
         idx[k] >= 0 && cells[idx[k]] !== undefined ? String(cells[idx[k]]).trim() : '';
       const rawCompanyId = get('companyId') || null;
       const companyName = get('companyName') || null;
+      const distributorName = get('distributorName') || null;
       const name = get('name') || null;
       const model = get('model') || null;
       const serialNo = get('serialNo') || null;
@@ -263,9 +281,32 @@ export class DeviceService {
         companyId = matches[0].id;
       }
 
+      let distributorId: string | null = null;
+      if (distributorName) {
+        const distMatches = await this.prisma.distributor.findMany({
+          where: { tenantId, name: { equals: distributorName, mode: 'insensitive' } },
+        });
+        if (distMatches.length === 1) {
+          distributorId = distMatches[0].id;
+        } else if (distMatches.length > 1) {
+          errors.push({
+            row: rowNum,
+            message: `Više distributera sa nazivom "${distributorName}".`,
+          });
+          continue;
+        } else {
+          errors.push({
+            row: rowNum,
+            message: `Distributer "${distributorName}" nije pronađen. Uvezi Teron Excel ili kreiraj distributera.`,
+          });
+          continue;
+        }
+      }
+
       try {
         await this.create(tenantId, userId, {
           companyId: companyId || undefined,
+          distributorId: distributorId || undefined,
           name: name || undefined,
           model: model || undefined,
           serialNo: serialNo || undefined,

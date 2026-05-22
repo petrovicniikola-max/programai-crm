@@ -19,6 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { DeviceService } from './device.service';
+import { DeviceTeronImportService } from './device-teron-import.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { ListDevicesQueryDto } from './dto/list-devices-query.dto';
@@ -28,12 +29,17 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
+const IMPORT_FILE_LIMIT = 20 * 1024 * 1024;
+
 @ApiTags('devices')
 @Controller('devices')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @ApiBearerAuth()
 export class DeviceController {
-  constructor(private readonly deviceService: DeviceService) {}
+  constructor(
+    private readonly deviceService: DeviceService,
+    private readonly teronImportService: DeviceTeronImportService,
+  ) {}
 
   @Get('export')
   @UseGuards(RolesGuard)
@@ -69,10 +75,10 @@ export class DeviceController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 2 * 1024 * 1024 },
+      limits: { fileSize: IMPORT_FILE_LIMIT },
     }),
   )
-  @ApiOperation({ summary: 'Import devices from CSV file' })
+  @ApiOperation({ summary: 'Import devices from CSV file (max 25000 rows)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
   async importCsv(
@@ -82,6 +88,34 @@ export class DeviceController {
   ) {
     if (!file?.buffer) throw new BadRequestException('Fajl je obavezan (polje "file")');
     return this.deviceService.importFromCsv(tenantId, userId, file.buffer);
+  }
+
+  @Post('import/teron-xlsx')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: IMPORT_FILE_LIMIT },
+    }),
+  )
+  @ApiOperation({
+    summary:
+      'Import Teron export (xlsx): devices, companies, distributors, licences (max 25000 rows)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
+  async importTeronXlsx(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @UploadedFile() file?: { buffer: Buffer; originalname?: string },
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Fajl je obavezan (polje "file")');
+    const name = file.originalname?.toLowerCase() ?? '';
+    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
+      throw new BadRequestException('Očekivan Excel fajl (.xlsx)');
+    }
+    return this.teronImportService.importFromExcel(tenantId, userId, file.buffer);
   }
 
   @Get('stats')

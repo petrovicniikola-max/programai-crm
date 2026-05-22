@@ -11,6 +11,11 @@ export class CreateDeviceDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  distributorId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   name?: string;
 
   @ApiPropertyOptional()
