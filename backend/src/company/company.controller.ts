@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CompanyService } from './company.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { ListCompaniesQueryDto } from './dto/list-companies-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -22,8 +23,8 @@ export class CompanyController {
 
   @Get()
   @ApiOperation({ summary: 'List companies' })
-  findAll(@CurrentUser('tenantId') tenantId: string) {
-    return this.companyService.findAll(tenantId);
+  findAll(@CurrentUser('tenantId') tenantId: string, @Query() query: ListCompaniesQueryDto) {
+    return this.companyService.findAll(tenantId, query.search);
   }
 
   @Get(':id')

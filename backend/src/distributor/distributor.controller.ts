@@ -1,5 +1,5 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { DistributorService } from './distributor.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
@@ -14,8 +14,9 @@ export class DistributorController {
 
   @Get()
   @ApiOperation({ summary: 'List distributors with device counts' })
-  findAll(@CurrentUser('tenantId') tenantId: string) {
-    return this.distributorService.findAll(tenantId);
+  @ApiQuery({ name: 'search', required: false })
+  findAll(@CurrentUser('tenantId') tenantId: string, @Query('search') search?: string) {
+    return this.distributorService.findAll(tenantId, search);
   }
 
   @Get(':id')

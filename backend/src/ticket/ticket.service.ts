@@ -43,6 +43,7 @@ export class TicketService {
         status: dto.status ?? 'OPEN',
         type: dto.type ?? 'OTHER',
         companyId: dto.companyId ?? undefined,
+        deviceId: dto.deviceId ?? undefined,
         contactId: dto.contactId ?? undefined,
         assigneeId: assigneeId ?? dto.assigneeId ?? undefined,
         createdByUserId: dto.createdByUserId ?? assigneeId ?? undefined,
@@ -55,7 +56,13 @@ export class TicketService {
         potpisOvlascenogLica: dto.potpisOvlascenogLica ?? undefined,
         ...(dto.ticketDate !== undefined && { ticketDate: new Date(dto.ticketDate) }),
       },
-      include: { company: true, contact: true, assignee: true, createdBy: true },
+      include: {
+        company: true,
+        device: { include: { distributor: true } },
+        contact: true,
+        assignee: true,
+        createdBy: true,
+      },
     });
   }
 
@@ -67,6 +74,16 @@ export class TicketService {
     else if (q.assigneeId) where.assigneeId = q.assigneeId;
     if (q.createdByUserId) where.createdByUserId = q.createdByUserId;
     if (q.companyId) where.companyId = q.companyId;
+    const search = q.search?.trim();
+    if (search && search.length >= 2) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { key: { contains: search, mode: 'insensitive' } },
+        { reportedBy: { contains: search, mode: 'insensitive' } },
+        { company: { name: { contains: search, mode: 'insensitive' } } },
+        { device: { serialNo: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
     if (q.keyStartsWith?.trim()) where.key = { startsWith: q.keyStartsWith.trim() };
     if (q.createdAtFrom || q.createdAtTo) {
       where.createdAt = {};
@@ -88,6 +105,7 @@ export class TicketService {
         where,
         include: {
           company: true,
+          device: { include: { distributor: true } },
           contact: true,
           assignee: { select: { id: true, email: true, displayName: true } },
           createdBy: { select: { id: true, email: true, displayName: true } },
@@ -106,6 +124,7 @@ export class TicketService {
       where: { id, tenantId },
       include: {
         company: true,
+        device: { include: { distributor: true } },
         contact: true,
         assignee: { select: { id: true, email: true, displayName: true } },
         createdBy: { select: { id: true, email: true, displayName: true } },
@@ -137,7 +156,16 @@ export class TicketService {
         ...(dto.status !== undefined && { status: dto.status as TicketStatus }),
         ...(dto.type !== undefined && { type: dto.type as TicketType }),
         ...(dto.companyId !== undefined && { companyId: dto.companyId || null }),
+        ...(dto.deviceId !== undefined && { deviceId: dto.deviceId || null }),
         ...(dto.contactId !== undefined && { contactId: dto.contactId || null }),
+        ...(dto.reportedBy !== undefined && { reportedBy: dto.reportedBy ?? null }),
+        ...(dto.putIAngazovanje !== undefined && { putIAngazovanje: dto.putIAngazovanje ?? null }),
+        ...(dto.tokPrijave !== undefined && { tokPrijave: dto.tokPrijave ?? null }),
+        ...(dto.zakljucak !== undefined && { zakljucak: dto.zakljucak ?? null }),
+        ...(dto.potpisOvlascenogLica !== undefined && { potpisOvlascenogLica: dto.potpisOvlascenogLica ?? null }),
+        ...(dto.ticketDate !== undefined && {
+          ticketDate: dto.ticketDate ? new Date(dto.ticketDate) : null,
+        }),
         ...(dto.assigneeId !== undefined && { assigneeId: dto.assigneeId || null }),
         ...(dto.key !== undefined && { key: dto.key }),
         ...(dto.description !== undefined && { description: dto.description ?? null }),
@@ -146,7 +174,12 @@ export class TicketService {
         ...(dto.contactMethod !== undefined && { contactMethod: dto.contactMethod ?? null }),
         ...(dto.contactsContactedCount !== undefined && { contactsContactedCount: dto.contactsContactedCount ?? null }),
       },
-      include: { company: true, contact: true, assignee: true },
+      include: {
+        company: true,
+        device: { include: { distributor: true } },
+        contact: true,
+        assignee: true,
+      },
     });
   }
 

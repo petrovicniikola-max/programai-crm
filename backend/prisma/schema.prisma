@@ -271,6 +271,8 @@ model Ticket {
   tenant               Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   companyId            String?
   company              Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  deviceId             String?
+  device               Device?         @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   contactId            String?
   contact              Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
   assigneeId           String?
@@ -518,6 +520,7 @@ model Device {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
   licences   Licence[]
+  tickets    Ticket[]
   // Meta / podeĹˇavanja ureÄ‘aja
   testDevice           Boolean @default(false)
   dpu                  Boolean @default(false)

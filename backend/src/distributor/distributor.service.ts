@@ -5,10 +5,15 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DistributorService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(tenantId: string) {
+  findAll(tenantId: string, search?: string) {
+    const q = search?.trim();
     return this.prisma.distributor.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ...(q && q.length >= 2 ? { name: { contains: q, mode: 'insensitive' } } : {}),
+      },
       orderBy: { name: 'asc' },
+      take: q ? 50 : undefined,
       include: {
         _count: { select: { devices: true } },
       },

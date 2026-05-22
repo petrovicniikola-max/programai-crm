@@ -24,10 +24,24 @@ export class CompanyService {
     });
   }
 
-  findAll(tenantId: string) {
+  findAll(tenantId: string, search?: string) {
+    const q = search?.trim();
     return this.prisma.company.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ...(q && q.length >= 2
+          ? {
+              OR: [
+                { name: { contains: q, mode: 'insensitive' } },
+                { pib: { contains: q, mode: 'insensitive' } },
+                { mb: { contains: q, mode: 'insensitive' } },
+                { city: { contains: q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { name: 'asc' },
+      take: q ? 50 : undefined,
     });
   }
 

@@ -34,6 +34,11 @@ export class CreateTicketDto {
   @IsString()
   companyId?: string;
 
+  @ApiPropertyOptional({ description: 'Device ID (CUID)' })
+  @IsOptional()
+  @IsString()
+  deviceId?: string;
+
   @ApiPropertyOptional({ description: 'Contact ID (CUID)' })
   @IsOptional()
   @IsString()
