@@ -229,6 +229,7 @@ model SalesDirectoryRow {
 
   @@unique([tenantId, externalKey])
   @@index([tenantId, updatedAt])
+  @@index([tenantId, createdAt])
 }
 
 model Contact {

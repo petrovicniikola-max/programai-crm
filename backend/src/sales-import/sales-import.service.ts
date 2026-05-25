@@ -44,6 +44,7 @@ const HEADER_MAP: Record<string, keyof SalesDirectoryRowInput> = {
   opis: 'description',
   'polu/mali': 'sizeClass',
   'polu mali': 'sizeClass',
+  'polu/mail': 'sizeClass',
   'poziv/mail': 'sizeClass',
   'poziv mail': 'sizeClass',
   datum: 'contactDate',
@@ -103,6 +104,7 @@ function mapHeaderToField(normHeader: string): keyof SalesDirectoryRowInput | un
   if (direct) return direct;
 
   // Tolerant matching for slightly different headers (spaces, suffixes, etc.)
+  if (normHeader.includes('osnivanja')) return 'establishedAt';
   if (normHeader.startsWith('datum')) return 'contactDate';
   if (normHeader.includes('poziv') && normHeader.includes('mail')) return 'sizeClass';
 
@@ -124,15 +126,28 @@ function parseDateValue(v: unknown): Date | undefined {
   const iso = new Date(text);
   if (!Number.isNaN(iso.getTime())) return iso;
 
-  // dd.MM.yyyy, dd/MM/yyyy, dd-MM-yyyy (e.g. 24.03.2026 or 24/03/2026)
-  // U realnim Excel fajlovima često postoji i dodatak vremena ("24/03/2026 00:00")
-  // pa ne zahtevamo kraj stringa.
+  // dd.MM.yyyy, dd/MM/yyyy, M/d/yyyy (npr. 3/20/2026 ili 20/03/2026)
   const m = text.match(/^(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{2,4})/);
   if (m) {
-    const day = Number(m[1]);
-    const month = Number(m[2]);
+    const a = Number(m[1]);
+    const b = Number(m[2]);
     let year = Number(m[3]);
     if (year < 100) year = year + (year < 70 ? 2000 : 1900);
+
+    let day: number;
+    let month: number;
+    if (a > 12 && b <= 12) {
+      day = a;
+      month = b;
+    } else if (b > 12 && a <= 12) {
+      month = a;
+      day = b;
+    } else {
+      day = a;
+      month = b;
+    }
+
+    if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
     const dt = new Date(Date.UTC(year, month - 1, day));
     return Number.isNaN(dt.getTime()) ? undefined : dt;
   }
@@ -168,6 +183,61 @@ function formatDateDdMmYyyy(d?: Date | null): string {
 
 function externalKey(row: SalesDirectoryRowInput): string {
   return [row.mb ?? '', row.pib ?? '', row.companyName ?? ''].join('|');
+}
+
+type DirectorySortField = 'createdAt' | 'establishedAt';
+type DirectorySortOrder = 'asc' | 'desc';
+
+function buildListOrderBy(
+  sortBy?: string,
+  sortOrder?: string,
+): Prisma.SalesDirectoryRowOrderByWithRelationInput[] {
+  const field: DirectorySortField =
+    sortBy === 'establishedAt' ? 'establishedAt' : 'createdAt';
+  const dir: DirectorySortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+  return [{ [field]: dir }, { createdAt: 'desc' }, { id: 'desc' }];
+}
+
+function rowToDbData(row: SalesDirectoryRowInput) {
+  const data: {
+    mb?: string | null;
+    pib?: string | null;
+    establishedAt?: Date | null;
+    companyName?: string | null;
+    city?: string | null;
+    postalCode?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    legalForm?: string | null;
+    activityCode?: string | null;
+    activityName?: string | null;
+    aprStatus?: string | null;
+    email?: string | null;
+    representative?: string | null;
+    description?: string | null;
+    sizeClass?: string | null;
+    contactDate?: Date | null;
+    fieldColors?: Prisma.InputJsonValue;
+  } = {};
+  if (row.mb !== undefined) data.mb = row.mb;
+  if (row.pib !== undefined) data.pib = row.pib;
+  if (row.establishedAt !== undefined) data.establishedAt = row.establishedAt;
+  if (row.companyName !== undefined) data.companyName = row.companyName;
+  if (row.city !== undefined) data.city = row.city;
+  if (row.postalCode !== undefined) data.postalCode = row.postalCode;
+  if (row.address !== undefined) data.address = row.address;
+  if (row.phone !== undefined) data.phone = row.phone;
+  if (row.legalForm !== undefined) data.legalForm = row.legalForm;
+  if (row.activityCode !== undefined) data.activityCode = row.activityCode;
+  if (row.activityName !== undefined) data.activityName = row.activityName;
+  if (row.aprStatus !== undefined) data.aprStatus = row.aprStatus;
+  if (row.email !== undefined) data.email = row.email;
+  if (row.representative !== undefined) data.representative = row.representative;
+  if (row.description !== undefined) data.description = row.description;
+  if (row.sizeClass !== undefined) data.sizeClass = row.sizeClass;
+  if (row.contactDate !== undefined) data.contactDate = row.contactDate;
+  if (row.fieldColors !== undefined) data.fieldColors = row.fieldColors;
+  return data;
 }
 
 @Injectable()
@@ -215,6 +285,8 @@ export class SalesImportService {
     limit = 50,
     filterField?: string,
     filterValue?: string,
+    sortBy?: string,
+    sortOrder?: string,
   ) {
     const take = Math.min(200, Math.max(1, limit));
     const safePage = Math.max(1, page);
@@ -237,7 +309,7 @@ export class SalesImportService {
     const [items, total] = await Promise.all([
       this.prisma.salesDirectoryRow.findMany({
         where,
-        orderBy: [{ contactDate: 'desc' }, { createdAt: 'desc' }, { updatedAt: 'desc' }],
+        orderBy: buildListOrderBy(sortBy, sortOrder),
         skip,
         take,
       }),
@@ -263,26 +335,41 @@ export class SalesImportService {
       throw new BadRequestException('Supported formats: .xlsx, .xls, .csv');
 
     let upserted = 0;
-    for (const row of rows) {
+    let skipped = 0;
+    const errors: { row: number; message: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       const key = externalKey(row);
-      if (!key.replace(/\|/g, '').trim()) continue;
-      await this.prisma.salesDirectoryRow.upsert({
-        where: { tenantId_externalKey: { tenantId, externalKey: key } },
-        create: {
-          tenantId,
-          externalKey: key,
-          ...row,
-        },
-        update: {
-          ...row,
-        },
-      });
-      upserted++;
+      if (!key.replace(/\|/g, '').trim()) {
+        skipped++;
+        continue;
+      }
+      const data = rowToDbData(row);
+      try {
+        await this.prisma.salesDirectoryRow.upsert({
+          where: { tenantId_externalKey: { tenantId, externalKey: key } },
+          create: {
+            tenantId,
+            externalKey: key,
+            ...data,
+          },
+          update: data,
+        });
+        upserted++;
+      } catch (err) {
+        skipped++;
+        const message =
+          err instanceof Error ? err.message : 'Nepoznata greška pri upisu reda';
+        errors.push({ row: i + 2, message });
+      }
     }
 
     return {
       imported: upserted,
-      skipped: Math.max(0, rows.length - upserted),
+      skipped,
+      totalRows: rows.length,
+      errors: errors.slice(0, 20),
       sourceFile: file.originalname,
       byUserId: userId ?? null,
     };
@@ -295,11 +382,12 @@ export class SalesImportService {
       .replace(/\s+/g, '')
       .slice(0, 80);
     const externalKeyValue = `${base || 'manual'}_${Date.now()}`;
+    const data = rowToDbData(row);
     return this.prisma.salesDirectoryRow.create({
       data: {
         tenantId,
         externalKey: externalKeyValue,
-        ...row,
+        ...data,
       },
     });
   }
@@ -308,7 +396,7 @@ export class SalesImportService {
     const row = this.toInput(dto);
     return this.prisma.salesDirectoryRow.updateMany({
       where: { id, tenantId },
-      data: row,
+      data: rowToDbData(row),
     });
   }
 
@@ -323,6 +411,8 @@ export class SalesImportService {
     format: 'csv' | 'xlsx',
     contactDateFrom?: string,
     contactDateTo?: string,
+    sortBy?: string,
+    sortOrder?: string,
   ): Promise<Buffer | string> {
     const where: Prisma.SalesDirectoryRowWhereInput = { tenantId };
     if (contactDateFrom || contactDateTo) {
@@ -340,7 +430,7 @@ export class SalesImportService {
 
     const rows = await this.prisma.salesDirectoryRow.findMany({
       where,
-      orderBy: [{ contactDate: 'desc' }, { createdAt: 'desc' }, { updatedAt: 'desc' }],
+      orderBy: buildListOrderBy(sortBy, sortOrder),
     });
 
     if (format === 'csv') {

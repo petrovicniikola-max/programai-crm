@@ -19,6 +19,7 @@ CREATE TABLE "SalesDirectoryRow" (
     "representative" TEXT,
     "description" TEXT,
     "sizeClass" TEXT,
+    "contactDate" TIMESTAMP(3),
     "fieldColors" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -27,6 +28,6 @@ CREATE TABLE "SalesDirectoryRow" (
 
 CREATE UNIQUE INDEX "SalesDirectoryRow_tenantId_externalKey_key" ON "SalesDirectoryRow"("tenantId", "externalKey");
 CREATE INDEX "SalesDirectoryRow_tenantId_updatedAt_idx" ON "SalesDirectoryRow"("tenantId", "updatedAt");
+CREATE INDEX "SalesDirectoryRow_tenantId_createdAt_idx" ON "SalesDirectoryRow"("tenantId", "createdAt");
 
 ALTER TABLE "SalesDirectoryRow" ADD CONSTRAINT "SalesDirectoryRow_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
