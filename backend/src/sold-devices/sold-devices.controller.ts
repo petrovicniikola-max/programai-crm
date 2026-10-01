@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
@@ -34,5 +34,18 @@ export class SoldDevicesController {
     @Body() dto: CreateSoldDeviceDto,
   ) {
     return this.devices.create(tenantId, userId, role, roleId, dto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Izmena prodatog uređaja' })
+  update(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('role') role: string,
+    @CurrentUser('roleId') roleId: string | undefined,
+    @Param('id') id: string,
+    @Body() dto: CreateSoldDeviceDto,
+  ) {
+    return this.devices.update(tenantId, userId, role, roleId, id, dto);
   }
 }

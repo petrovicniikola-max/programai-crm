@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+
+export const SOLD_DEVICE_MONTHS = [3, 6, 12, 24] as const;
 
 export class CreateSoldDeviceDto {
   @ApiProperty({ example: 'SN-001234' })
@@ -21,11 +23,10 @@ export class CreateSoldDeviceDto {
   @MaxLength(200)
   licenceName!: string;
 
-  @ApiProperty({ example: 12 })
+  @ApiProperty({ example: 12, enum: SOLD_DEVICE_MONTHS })
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(120)
+  @IsIn(SOLD_DEVICE_MONTHS)
   months!: number;
 
   @ApiPropertyOptional()

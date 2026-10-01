@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { CreateSoldDeviceDto } from './dto/create-sold-device.dto';
@@ -68,6 +68,54 @@ export class SoldDevicesService {
       include: { user: { select: { displayName: true, email: true } } },
     });
 
+    return this.toRow(row);
+  }
+
+  async update(
+    tenantId: string,
+    userId: string,
+    role: string,
+    roleId: string | null | undefined,
+    id: string,
+    dto: CreateSoldDeviceDto,
+  ) {
+    const allowed = await this.can(userId, role, roleId, 'edit');
+    if (!allowed) throw new ForbiddenException('Nemate pravo da menjate prodate uređaje');
+
+    const current = await this.prisma.soldDevice.findFirst({ where: { id, tenantId }, select: { id: true } });
+    if (!current) throw new NotFoundException('Unos nije pronađen');
+
+    const serialNo = dto.serialNo.trim();
+    const licenceName = dto.licenceName.trim();
+    const name = dto.name?.trim() || null;
+    const description = dto.description?.trim() || null;
+    if (!serialNo) throw new BadRequestException('Unesite SN');
+    if (!licenceName) throw new BadRequestException('Unesite licencu');
+
+    const existing = await this.prisma.soldDevice.findFirst({
+      where: { tenantId, serialNo, NOT: { id } },
+      select: { id: true },
+    });
+    if (existing) throw new BadRequestException('Uređaj sa ovim SN već postoji.');
+
+    const row = await this.prisma.soldDevice.update({
+      where: { id },
+      data: { serialNo, name, licenceName, months: dto.months, description },
+      include: { user: { select: { displayName: true, email: true } } },
+    });
+    return this.toRow(row);
+  }
+
+  private toRow(row: {
+    id: string;
+    serialNo: string;
+    name: string | null;
+    licenceName: string;
+    months: number;
+    description: string | null;
+    createdAt: Date;
+    user: { displayName: string | null; email: string };
+  }) {
     return {
       id: row.id,
       serialNo: row.serialNo,
