@@ -411,6 +411,7 @@ model SoldDevice {
   name        String?
   licenceName String
   months      Int
+  bonusAmount Int      @default(0)
   description String?
   createdAt   DateTime @default(now())
 

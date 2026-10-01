@@ -3,6 +3,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { CreateSoldDeviceDto } from './dto/create-sold-device.dto';
 
+const BONUS_BY_LICENCE: Record<string, number> = {
+  pc: 1200,
+  'cloud middleware': 2400,
+  'android phone/tablet': 1200,
+  android: 1200,
+  'fiscal box': 2400,
+};
+
+function bonusForLicence(licenceName: string): number {
+  return BONUS_BY_LICENCE[licenceName.trim().toLowerCase()] ?? 0;
+}
+
 @Injectable()
 export class SoldDevicesService {
   constructor(
@@ -20,16 +32,7 @@ export class SoldDevicesService {
       include: { user: { select: { displayName: true, email: true } } },
     });
 
-    return rows.map((row) => ({
-      id: row.id,
-      serialNo: row.serialNo,
-      name: row.name,
-      licenceName: row.licenceName,
-      months: row.months,
-      description: row.description,
-      createdAt: row.createdAt.toISOString(),
-      enteredBy: row.user.displayName?.trim() || row.user.email,
-    }));
+    return rows.map((row) => this.toRow(row));
   }
 
   async create(
@@ -63,6 +66,7 @@ export class SoldDevicesService {
         name,
         licenceName,
         months: dto.months,
+        bonusAmount: bonusForLicence(licenceName),
         description,
       },
       include: { user: { select: { displayName: true, email: true } } },
@@ -100,7 +104,7 @@ export class SoldDevicesService {
 
     const row = await this.prisma.soldDevice.update({
       where: { id },
-      data: { serialNo, name, licenceName, months: dto.months, description },
+      data: { serialNo, name, licenceName, months: dto.months, bonusAmount: bonusForLicence(licenceName), description },
       include: { user: { select: { displayName: true, email: true } } },
     });
     return this.toRow(row);
@@ -112,6 +116,7 @@ export class SoldDevicesService {
     name: string | null;
     licenceName: string;
     months: number;
+    bonusAmount: number;
     description: string | null;
     createdAt: Date;
     user: { displayName: string | null; email: string };
@@ -122,6 +127,7 @@ export class SoldDevicesService {
       name: row.name,
       licenceName: row.licenceName,
       months: row.months,
+      bonusAmount: row.bonusAmount,
       description: row.description,
       createdAt: row.createdAt.toISOString(),
       enteredBy: row.user.displayName?.trim() || row.user.email,
