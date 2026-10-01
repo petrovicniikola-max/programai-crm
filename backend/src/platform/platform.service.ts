@@ -141,4 +141,13 @@ export class PlatformService {
     });
     return user;
   }
+
+  async listTenantUsers(tenantId: string) {
+    await this.findOne(tenantId);
+    return this.prisma.user.findMany({
+      where: { tenantId, isActive: true },
+      select: { id: true, email: true, displayName: true, role: true },
+      orderBy: [{ displayName: 'asc' }, { email: 'asc' }],
+    });
+  }
 }

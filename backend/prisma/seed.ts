@@ -62,53 +62,108 @@ async function main() {
     update: { passwordHash, role: 'SUPER_ADMIN', displayName: 'Admin' },
   });
 
-  const demoCompany = await prisma.company.upsert({
-    where: { id: 'seed-company-demo' },
-    create: {
-      id: 'seed-company-demo',
-      tenantId: tenant.id,
-      name: 'Demo Company',
-    },
-    update: { name: 'Demo Company' },
-  });
+  // Demo kompanija/uređaj/licenca se kreiraju samo kad je SEED_DEMO=true.
+  // U produkciji ostavi neuključeno da ne bi zaprljalo statistiku dashboarda.
+  if (process.env.SEED_DEMO === 'true') {
+    const demoCompany = await prisma.company.upsert({
+      where: { id: 'seed-company-demo' },
+      create: {
+        id: 'seed-company-demo',
+        tenantId: tenant.id,
+        name: 'Demo Company',
+      },
+      update: { name: 'Demo Company' },
+    });
 
-  const validTo = new Date();
-  validTo.setDate(validTo.getDate() + 7);
+    const validTo = new Date();
+    validTo.setDate(validTo.getDate() + 7);
 
-  await prisma.device.upsert({
-    where: {
-      tenantId_serialNo: { tenantId: tenant.id, serialNo: 'DEMO-SN-001' },
-    },
-    create: {
-      tenantId: tenant.id,
-      companyId: demoCompany.id,
-      name: 'Demo Device',
-      model: 'Fiscal Pro',
-      serialNo: 'DEMO-SN-001',
-      status: 'ACTIVE',
-    },
-    update: {},
-  });
-
-  const licence = await prisma.licence.findFirst({
-    where: { tenantId: tenant.id, productName: 'Teron Fiscal Pro (Demo)' },
-  });
-  if (!licence) {
-    await prisma.licence.create({
-      data: {
+    await prisma.device.upsert({
+      where: {
+        tenantId_serialNo: { tenantId: tenant.id, serialNo: 'DEMO-SN-001' },
+      },
+      create: {
         tenantId: tenant.id,
         companyId: demoCompany.id,
-        productName: 'Teron Fiscal Pro (Demo)',
-        validTo,
+        name: 'Demo Device',
+        model: 'Fiscal Pro',
+        serialNo: 'DEMO-SN-001',
         status: 'ACTIVE',
       },
+      update: {},
     });
-  } else {
-    await prisma.licence.update({
-      where: { id: licence.id },
-      data: { validTo },
+
+    const licence = await prisma.licence.findFirst({
+      where: { tenantId: tenant.id, productName: 'Teron Fiscal Pro (Demo)' },
     });
+    if (!licence) {
+      await prisma.licence.create({
+        data: {
+          tenantId: tenant.id,
+          companyId: demoCompany.id,
+          productName: 'Teron Fiscal Pro (Demo)',
+          validTo,
+          status: 'ACTIVE',
+        },
+      });
+    } else {
+      await prisma.licence.update({
+        where: { id: licence.id },
+        data: { validTo },
+      });
+    }
   }
+
+  const qaPassword = process.env.SEED_QA_PASSWORD || 'Test123!';
+  const qaHash = await bcrypt.hash(qaPassword, 10);
+
+  const support = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId: tenant.id, email: 'support1@demo.local' } },
+    create: {
+      email: 'support1@demo.local',
+      displayName: 'Support QA',
+      passwordHash: qaHash,
+      role: 'SUPPORT',
+      tenantId: tenant.id,
+    },
+    update: { passwordHash: qaHash, role: 'SUPPORT', displayName: 'Support QA' },
+  });
+
+  const user1 = await prisma.user.upsert({
+    where: { tenantId_email: { tenantId: tenant.id, email: 'user1@demo.local' } },
+    create: {
+      email: 'user1@demo.local',
+      displayName: 'User QA',
+      passwordHash: qaHash,
+      role: 'USER',
+      tenantId: tenant.id,
+      employmentDate: new Date('2024-01-15'),
+      leaveApproverId: support.id,
+      jobTitle: 'IT Support',
+    },
+    update: {
+      passwordHash: qaHash,
+      role: 'USER',
+      displayName: 'User QA',
+      employmentDate: new Date('2024-01-15'),
+      leaveApproverId: support.id,
+      jobTitle: 'IT Support',
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { tenantId_email: { tenantId: tenant.id, email: 'sales1@demo.local' } },
+    create: {
+      email: 'sales1@demo.local',
+      displayName: 'Sales QA',
+      passwordHash: qaHash,
+      role: 'SALES',
+      tenantId: tenant.id,
+    },
+    update: { passwordHash: qaHash, role: 'SALES', displayName: 'Sales QA' },
+  });
+
+  void user1;
 
   const platformAdminEmail = 'platform@local';
   const platformAdminPassword = process.env.SEED_PLATFORM_PASSWORD || 'Platform123!';
@@ -134,7 +189,9 @@ async function main() {
     });
   }
 
-  console.log('Seed completed: Demo Tenant + admin@demo.local (SUPER_ADMIN), platform@local (platform admin), demo device + licence');
+  console.log(
+    'Seed completed: admin@demo.local (Admin123!), support1/sales1/user1@demo.local (Test123!), platform@local',
+  );
   await prisma.$disconnect();
 }
 

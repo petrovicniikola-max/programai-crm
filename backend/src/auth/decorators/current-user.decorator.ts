@@ -4,6 +4,7 @@ export interface JwtUser {
   userId: string;
   tenantId: string | null;
   role: string;
+  roleId?: string | null;
   email: string;
   displayName?: string;
   isPlatformAdmin: boolean;

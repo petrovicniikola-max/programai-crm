@@ -13,6 +13,11 @@ export class CreateDeviceDto {
   @IsString()
   distributorId?: string;
 
+  @ApiPropertyOptional({ description: 'Pod-distributer (opciono, slobodan tekst)' })
+  @IsOptional()
+  @IsString()
+  subDistributorName?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

@@ -17,9 +17,15 @@ export class CreateUserDto {
   @MinLength(8)
   password!: string;
 
-  @ApiProperty({ enum: ['SUPER_ADMIN', 'SUPPORT', 'SALES', 'USER'] })
+  @ApiPropertyOptional({ enum: ['SUPER_ADMIN', 'SUPPORT', 'SALES', 'USER', 'ACCOUNTANT'] })
+  @IsOptional()
   @IsEnum(UserRole)
-  role!: UserRole;
+  role?: UserRole;
+
+  @ApiPropertyOptional({ description: 'RBAC role id (preferred over role enum)' })
+  @IsOptional()
+  @IsString()
+  roleId?: string;
 
   @ApiPropertyOptional({ description: 'Company id for USER role (required when role is USER)' })
   @IsOptional()

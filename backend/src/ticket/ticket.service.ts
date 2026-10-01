@@ -103,10 +103,21 @@ export class TicketService {
     const [items, total] = await Promise.all([
       this.prisma.ticket.findMany({
         where,
-        include: {
-          company: true,
-          device: { include: { distributor: true } },
-          contact: true,
+        select: {
+          id: true,
+          key: true,
+          title: true,
+          status: true,
+          type: true,
+          createdAt: true,
+          updatedAt: true,
+          assigneeId: true,
+          createdByUserId: true,
+          contactMethod: true,
+          contactsContactedCount: true,
+          company: { select: { id: true, name: true } },
+          contact: { select: { id: true, name: true } },
+          device: { select: { id: true, name: true, serialNo: true } },
           assignee: { select: { id: true, email: true, displayName: true } },
           createdBy: { select: { id: true, email: true, displayName: true } },
         },
@@ -117,6 +128,14 @@ export class TicketService {
       this.prisma.ticket.count({ where }),
     ]);
     return { items, total, page, limit: take, totalPages: Math.ceil(total / take) };
+  }
+
+  private async assertTicketExists(tenantId: string, id: string) {
+    const exists = await this.prisma.ticket.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('Ticket not found');
   }
 
   async findOne(tenantId: string, id: string) {
@@ -141,7 +160,7 @@ export class TicketService {
   }
 
   async update(tenantId: string, id: string, dto: UpdateTicketDto) {
-    await this.findOne(tenantId, id);
+    await this.assertTicketExists(tenantId, id);
     if (dto.key) {
       const existing = await this.prisma.ticket.findFirst({
         where: { tenantId, key: dto.key },
@@ -184,7 +203,7 @@ export class TicketService {
   }
 
   async updateStatus(tenantId: string, id: string, status: TicketStatus) {
-    await this.findOne(tenantId, id);
+    await this.assertTicketExists(tenantId, id);
     return this.prisma.ticket.update({
       where: { id },
       data: { status },
@@ -193,7 +212,7 @@ export class TicketService {
   }
 
   async setCallTimeNow(tenantId: string, id: string) {
-    await this.findOne(tenantId, id);
+    await this.assertTicketExists(tenantId, id);
     return this.prisma.ticket.update({
       where: { id },
       data: { callOccurredAt: new Date() },
@@ -202,7 +221,7 @@ export class TicketService {
   }
 
   async remove(tenantId: string, id: string) {
-    await this.findOne(tenantId, id);
+    await this.assertTicketExists(tenantId, id);
     return this.prisma.ticket.delete({ where: { id } });
   }
 
@@ -299,6 +318,8 @@ export class TicketService {
           company: { id: company.id, name: company.name, pib: company.pib, mb: company.mb },
         };
       }
+      const dir = await this.findDirectoryCompany(tenantId, { pib });
+      if (dir) return { company: dir };
     }
 
     if (mb) {
@@ -315,9 +336,30 @@ export class TicketService {
           company: { id: company.id, name: company.name, pib: company.pib, mb: company.mb },
         };
       }
+      const dir = await this.findDirectoryCompany(tenantId, { mb });
+      if (dir) return { company: dir };
     }
 
     return {};
+  }
+
+  /**
+   * Fallback pretraga kompanije u sales direktorijumu (APR podaci) po PIB-u ili MB-u
+   * kada kompanija još nije kreirana kao Company zapis. Vraća podatke za autofill;
+   * id je prazan jer Company zapis ne postoji (kreira se pri slanju poziva).
+   */
+  private async findDirectoryCompany(
+    tenantId: string,
+    params: { pib?: string; mb?: string },
+  ): Promise<{ id: string; name: string; pib: string | null; mb: string | null } | null> {
+    const where = params.pib ? { tenantId, pib: params.pib } : { tenantId, mb: params.mb };
+    const [directory, distributor] = await Promise.all([
+      this.prisma.salesDirectoryRow.findFirst({ where }),
+      this.prisma.salesDistributorEmailRow.findFirst({ where }),
+    ]);
+    const row = directory ?? distributor;
+    if (!row || !row.companyName?.trim()) return null;
+    return { id: '', name: row.companyName.trim(), pib: row.pib, mb: row.mb };
   }
 
   async quickCall(tenantId: string, dto: QuickCallDto, createdByUserId?: string): Promise<QuickCallResult> {

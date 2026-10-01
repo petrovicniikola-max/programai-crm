@@ -8,6 +8,7 @@ import { LicenceService } from '../licence/licence.service';
 import { TicketsExportQueryDto } from './dto/tickets-export-query.dto';
 import { SalesExportQueryDto } from './dto/sales-export-query.dto';
 import type { ReportEmailConfigItem } from './dto/alerts-config.dto';
+import type { AdminDashboardDto, AdminDashboardSlice } from './admin-dashboard.types';
 
 export interface ReportsOverviewDto {
   ticketsByStatus: Record<string, number>;
@@ -118,6 +119,7 @@ export class ReportsService {
     const result: Record<string, number> = {};
     const settings = await this.prisma.tenantSettings.findUnique({
       where: { tenantId },
+      select: { notificationsDaysBefore: true },
     });
     const notificationsDaysBefore = (settings?.notificationsDaysBefore as number[] | null) ?? [
       30, 14, 7, 1,
@@ -125,29 +127,214 @@ export class ReportsService {
     const days = [...notificationsDaysBefore]
       .filter((d) => typeof d === 'number' && d >= 0)
       .sort((a, b) => b - a);
+    if (days.length === 0) {
+      return { expiringLicences: result, expiringLicencesDays: days };
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const maxDay = days[0]!;
+    const rangeEnd = new Date(today);
+    rangeEnd.setDate(rangeEnd.getDate() + maxDay);
+    rangeEnd.setHours(23, 59, 59, 999);
+    const licences = await this.prisma.licence.findMany({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        validTo: { gte: today, lte: rangeEnd },
+      },
+      select: { validTo: true },
+    });
     for (let i = 0; i < days.length; i++) {
       const d = days[i]!;
       const prev = i < days.length - 1 ? days[i + 1]! : 0;
       const rangeStartDays = prev + 1;
       const rangeEndDays = d;
-      const start = new Date(today);
-      start.setDate(start.getDate() + rangeStartDays);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(today);
-      end.setDate(end.getDate() + rangeEndDays);
-      end.setHours(23, 59, 59, 999);
-      const count = await this.prisma.licence.count({
-        where: {
-          tenantId,
-          status: 'ACTIVE',
-          validTo: { gte: start, lte: end },
-        },
-      });
+      let count = 0;
+      for (const lic of licences) {
+        const validTo = new Date(lic.validTo);
+        validTo.setHours(0, 0, 0, 0);
+        const daysUntil = Math.round(
+          (validTo.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+        );
+        if (daysUntil >= rangeStartDays && daysUntil <= rangeEndDays) count++;
+      }
       result[String(d)] = count;
     }
     return { expiringLicences: result, expiringLicencesDays: days };
+  }
+
+  async getAdminDashboard(tenantId: string): Promise<AdminDashboardDto> {
+    const now = new Date();
+    const since48h = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+    const [
+      companies,
+      distributors,
+      activeDevices,
+      activeLicences,
+      expiredLicences,
+      ticketsOpen,
+      devices,
+      licencedPairs,
+      packagesGrouped,
+    ] = await Promise.all([
+      this.prisma.company.count({ where: { tenantId } }),
+      this.prisma.distributor.count({ where: { tenantId } }),
+      this.prisma.device.count({ where: { tenantId, status: 'ACTIVE' } }),
+      this.prisma.licence.count({
+        where: { tenantId, status: 'ACTIVE', validTo: { gte: now } },
+      }),
+      this.prisma.licence.count({ where: { tenantId, status: 'EXPIRED' } }),
+      this.prisma.ticket.count({
+        where: { tenantId, status: { in: ['OPEN', 'IN_PROGRESS'] } },
+      }),
+      this.prisma.device.findMany({
+        where: { tenantId, status: 'ACTIVE' },
+        select: {
+          id: true,
+          model: true,
+          companyId: true,
+          distributorId: true,
+          sufEnvironment: true,
+          updatedAt: true,
+          distributor: { select: { name: true } },
+        },
+      }),
+      this.prisma.licence.findMany({
+        where: {
+          tenantId,
+          status: 'ACTIVE',
+          validTo: { gte: now },
+          deviceId: { not: null },
+        },
+        select: { deviceId: true },
+        distinct: ['deviceId'],
+      }),
+      this.prisma.licence.groupBy({
+        by: ['productName'],
+        where: { tenantId, status: 'ACTIVE', validTo: { gte: now } },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 50,
+      }),
+    ]);
+
+    const licencedDeviceIds = new Set(
+      licencedPairs.map((l) => l.deviceId).filter((id): id is string => id != null),
+    );
+
+    const distributorCounts = new Map<string, number>();
+    const modelCounts = new Map<string, number>();
+    const deviceModelRows = new Map<
+      string,
+      {
+        total: number;
+        assigned: number;
+        available: number;
+        withDistributor: number;
+        activeLicence: number;
+        updated48h: number;
+      }
+    >();
+    let withLicence = 0;
+    let withoutLicence = 0;
+    let sufProduction = 0;
+    let sufTest = 0;
+    let sufUnknown = 0;
+
+    for (const d of devices) {
+      const model = d.model?.trim() || '(nepoznat model)';
+      const distLabel = d.distributor?.name?.trim() || '(bez distributera)';
+      distributorCounts.set(distLabel, (distributorCounts.get(distLabel) ?? 0) + 1);
+      modelCounts.set(model, (modelCounts.get(model) ?? 0) + 1);
+
+      const row = deviceModelRows.get(model) ?? {
+        total: 0,
+        assigned: 0,
+        available: 0,
+        withDistributor: 0,
+        activeLicence: 0,
+        updated48h: 0,
+      };
+      row.total += 1;
+      if (d.companyId) row.assigned += 1;
+      else row.available += 1;
+      if (d.distributorId) row.withDistributor += 1;
+      if (licencedDeviceIds.has(d.id)) row.activeLicence += 1;
+      if (d.updatedAt >= since48h) row.updated48h += 1;
+      deviceModelRows.set(model, row);
+
+      if (licencedDeviceIds.has(d.id)) withLicence += 1;
+      else withoutLicence += 1;
+
+      const suf = (d.sufEnvironment ?? '').toLowerCase();
+      if (suf === 'produkciono') sufProduction += 1;
+      else if (suf === 'test') sufTest += 1;
+      else sufUnknown += 1;
+    }
+
+    const toSlices = (map: Map<string, number>, limit = 8): AdminDashboardSlice[] =>
+      Array.from(map.entries())
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, limit);
+
+    const devicesByModel = Array.from(deviceModelRows.entries())
+      .map(([model, row]) => ({ model, ...row }))
+      .sort((a, b) => b.total - a.total);
+
+    const devicesTotals = devicesByModel.reduce(
+      (acc, row) => ({
+        total: acc.total + row.total,
+        assigned: acc.assigned + row.assigned,
+        available: acc.available + row.available,
+        withDistributor: acc.withDistributor + row.withDistributor,
+        activeLicence: acc.activeLicence + row.activeLicence,
+        updated48h: acc.updated48h + row.updated48h,
+      }),
+      {
+        total: 0,
+        assigned: 0,
+        available: 0,
+        withDistributor: 0,
+        activeLicence: 0,
+        updated48h: 0,
+      },
+    );
+
+    return {
+      generatedAt: now.toISOString(),
+      summary: {
+        companies,
+        distributors,
+        activeDevices,
+        activeLicences,
+        expiredLicences,
+        ticketsOpen,
+      },
+      byDistributor: toSlices(distributorCounts),
+      byModel: toSlices(modelCounts),
+      licenceCoverage: [
+        { label: 'Sa aktivnom licencom', value: withLicence },
+        { label: 'Bez aktivne licence', value: withoutLicence },
+      ],
+      sufProduction: [
+        { label: 'SUF produkciono', value: sufProduction },
+        { label: 'SUF test', value: sufTest },
+        { label: 'SUF nepoznato', value: sufUnknown },
+      ].filter((s) => s.value > 0),
+      activePackages: packagesGrouped.map((p) => ({
+        productName: p.productName,
+        total: p._count.id,
+      })),
+      devicesByModel: [
+        ...devicesByModel,
+        {
+          model: '__UKUPNO__',
+          ...devicesTotals,
+        },
+      ],
+    };
   }
 
   async getTicketsCsv(tenantId: string, q: TicketsExportQueryDto): Promise<string> {

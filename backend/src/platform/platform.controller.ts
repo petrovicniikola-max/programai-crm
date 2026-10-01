@@ -54,6 +54,12 @@ export class PlatformController {
     return this.platformService.updateTenant(userId, id, dto);
   }
 
+  @Get('tenants/:id/users')
+  @ApiOperation({ summary: 'List users in tenant (platform admin)' })
+  listTenantUsers(@Param('id') id: string) {
+    return this.platformService.listTenantUsers(id);
+  }
+
   @Post('tenants/:id/users')
   @ApiOperation({ summary: 'Create first tenant admin (SUPER_ADMIN user)' })
   createTenantAdmin(

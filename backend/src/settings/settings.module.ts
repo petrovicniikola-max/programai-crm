@@ -9,18 +9,25 @@ import { SettingsEmailService } from './settings-email.service';
 import { SettingsExportService } from './settings-export.service';
 import { AuditLogService } from './audit-log.service';
 import { TagModule } from '../tag/tag.module';
+import { SettingsUiTextsService } from './settings-ui-texts.service';
+import { SettingsLeaveService } from './settings-leave.service';
+import { SettingsLeaveBalancesService } from './settings-leave-balances.service';
+import { LeaveModule } from '../leave/leave.module';
 
 @Module({
-  imports: [TagModule],
+  imports: [TagModule, LeaveModule],
   controllers: [SettingsController],
   providers: [
     SettingsBrandingService,
     SettingsUsersService,
+    SettingsLeaveService,
+    SettingsLeaveBalancesService,
     SettingsTicketSettingsService,
     SettingsNotificationsService,
     SettingsSecurityService,
     SettingsEmailService,
     SettingsExportService,
+    SettingsUiTextsService,
     AuditLogService,
   ],
   exports: [AuditLogService],

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Body,
   Param,
@@ -18,8 +19,8 @@ import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@ne
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../permissions/permissions.guard';
+import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { JwtUser } from '../auth/decorators/current-user.decorator';
 import { SettingsBrandingService } from './settings-branding.service';
@@ -40,11 +41,21 @@ import { PatchNotificationsDto } from './dto/notifications.dto';
 import { PatchSecurityDto } from './dto/security.dto';
 import { PatchEmailSettingsDto } from './dto/email-settings.dto';
 import { CreateTagDto } from './dto/create-tag.dto';
+import { PatchUiTextsDto } from './dto/patch-ui-texts.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import sharp from 'sharp';
 import * as path from 'path';
 import { promises as fs } from 'fs';
+import { SettingsUiTextsService } from './settings-ui-texts.service';
+import { SettingsLeaveService } from './settings-leave.service';
+import {
+  PatchLeaveSettingsDto,
+  CreateHolidayDto,
+  CreateLeaveAdjustmentDto,
+  SetPreviousLeaveDto,
+} from './dto/leave-settings.dto';
+import { SettingsLeaveBalancesService } from './settings-leave-balances.service';
 
 @ApiTags('settings')
 @Controller('settings')
@@ -59,21 +70,44 @@ export class SettingsController {
     private readonly security: SettingsSecurityService,
     private readonly emailSettings: SettingsEmailService,
     private readonly exportService: SettingsExportService,
+    private readonly uiTexts: SettingsUiTextsService,
     private readonly audit: AuditLogService,
     private readonly tagService: TagService,
+    private readonly leaveSettings: SettingsLeaveService,
+    private readonly leaveBalances: SettingsLeaveBalancesService,
   ) {}
 
   @Get('branding')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @ApiOperation({ summary: 'Get branding (SUPER_ADMIN only)' })
   getBranding(@CurrentUser('tenantId') tenantId: string) {
     return this.branding.get(tenantId);
   }
 
+  @Get('texts')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
+  @ApiOperation({ summary: 'Get UI text overrides (SUPER_ADMIN only)' })
+  getUiTexts(@CurrentUser('tenantId') tenantId: string) {
+    return this.uiTexts.get(tenantId);
+  }
+
+  @Patch('texts')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
+  @ApiOperation({ summary: 'Update UI text overrides (SUPER_ADMIN only)' })
+  patchUiTexts(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: PatchUiTextsDto,
+  ) {
+    return this.uiTexts.patch(tenantId, userId, dto.texts ?? {});
+  }
+
   @Patch('branding')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @ApiOperation({ summary: 'Update branding' })
   patchBranding(
     @CurrentUser('tenantId') tenantId: string,
@@ -84,8 +118,8 @@ export class SettingsController {
   }
 
   @Post('branding/logo')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -132,16 +166,16 @@ export class SettingsController {
   }
 
   @Get('users')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings.users', 'view')
   @ApiOperation({ summary: 'List users (SUPER_ADMIN only)' })
   getUsers(@CurrentUser('tenantId') tenantId: string) {
     return this.users.findAll(tenantId);
   }
 
   @Post('users')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings.users', 'edit')
   @ApiOperation({ summary: 'Create user' })
   createUser(
     @CurrentUser('tenantId') tenantId: string,
@@ -152,8 +186,8 @@ export class SettingsController {
   }
 
   @Patch('users/:id')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings.users', 'edit')
   @ApiOperation({ summary: 'Update user' })
   updateUser(
     @CurrentUser('tenantId') tenantId: string,
@@ -165,8 +199,8 @@ export class SettingsController {
   }
 
   @Post('users/:id/reset-password')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings.users', 'edit')
   @ApiOperation({ summary: 'Reset user password' })
   resetPassword(
     @CurrentUser('tenantId') tenantId: string,
@@ -178,16 +212,16 @@ export class SettingsController {
   }
 
   @Get('tickets')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @ApiOperation({ summary: 'Get ticket settings (SUPER_ADMIN only)' })
   getTicketSettings(@CurrentUser('tenantId') tenantId: string) {
     return this.ticketSettings.get(tenantId);
   }
 
   @Patch('tickets')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @ApiOperation({ summary: 'Update ticket settings' })
   patchTicketSettings(
     @CurrentUser('tenantId') tenantId: string,
@@ -204,8 +238,8 @@ export class SettingsController {
   }
 
   @Post('tags')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @ApiOperation({ summary: 'Create tag (SUPER_ADMIN only)' })
   async createTag(
     @CurrentUser('tenantId') tenantId: string,
@@ -225,8 +259,8 @@ export class SettingsController {
   }
 
   @Delete('tags/:id')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @ApiOperation({ summary: 'Delete tag (SUPER_ADMIN only)' })
   async deleteTag(
     @CurrentUser('tenantId') tenantId: string,
@@ -245,16 +279,16 @@ export class SettingsController {
   }
 
   @Get('notifications')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @ApiOperation({ summary: 'Get notifications config (SUPER_ADMIN only)' })
   getNotifications(@CurrentUser('tenantId') tenantId: string) {
     return this.notifications.get(tenantId);
   }
 
   @Patch('notifications')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @ApiOperation({ summary: 'Update notifications config' })
   patchNotifications(
     @CurrentUser('tenantId') tenantId: string,
@@ -265,8 +299,8 @@ export class SettingsController {
   }
 
   @Get('export/companies.csv')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @Header('Content-Type', 'text/csv')
   @ApiOperation({ summary: 'Export companies CSV (SUPER_ADMIN only)' })
   async exportCompaniesCsv(
@@ -286,8 +320,8 @@ export class SettingsController {
   }
 
   @Get('export/contacts.csv')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @Header('Content-Type', 'text/csv')
   @ApiOperation({ summary: 'Export contacts CSV (SUPER_ADMIN only)' })
   async exportContactsCsv(
@@ -307,8 +341,8 @@ export class SettingsController {
   }
 
   @Get('export/tickets.csv')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @Header('Content-Type', 'text/csv')
   @ApiOperation({ summary: 'Export tickets CSV (SUPER_ADMIN only)' })
   async exportTicketsCsv(
@@ -328,8 +362,8 @@ export class SettingsController {
   }
 
   @Get('export/forms.csv')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @Header('Content-Type', 'text/csv')
   @ApiOperation({ summary: 'Export forms list CSV (SUPER_ADMIN only). Optional formIds=id1,id2 to export only selected.' })
   @ApiQuery({ name: 'formIds', required: false, description: 'Comma-separated form IDs to export only those' })
@@ -354,16 +388,16 @@ export class SettingsController {
   }
 
   @Get('email')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @ApiOperation({ summary: 'Get email/sending config (SUPER_ADMIN only). Password never returned.' })
   getEmailSettings(@CurrentUser('tenantId') tenantId: string) {
     return this.emailSettings.get(tenantId);
   }
 
   @Patch('email')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @ApiOperation({ summary: 'Update email sending: address, provider (Google/M365), password (optional)' })
   patchEmailSettings(
     @CurrentUser('tenantId') tenantId: string,
@@ -374,16 +408,16 @@ export class SettingsController {
   }
 
   @Get('security')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @ApiOperation({ summary: 'Get security config (SUPER_ADMIN only)' })
   getSecurity(@CurrentUser('tenantId') tenantId: string) {
     return this.security.get(tenantId);
   }
 
   @Patch('security')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
   @ApiOperation({ summary: 'Update security (jwtAccessTtlMinutes; TODO apply at token issue)' })
   patchSecurity(
     @CurrentUser('tenantId') tenantId: string,
@@ -393,9 +427,147 @@ export class SettingsController {
     return this.security.patch(tenantId, userId, dto);
   }
 
+  @Get('leave')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
+  @ApiOperation({ summary: 'Get leave settings (SUPER_ADMIN only)' })
+  getLeaveSettings(@CurrentUser('tenantId') tenantId: string) {
+    return this.leaveSettings.getSettings(tenantId);
+  }
+
+  @Patch('leave')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
+  @ApiOperation({ summary: 'Update leave settings (SUPER_ADMIN only)' })
+  patchLeaveSettings(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() dto: PatchLeaveSettingsDto,
+  ) {
+    return this.leaveSettings.patchSettings(tenantId, dto);
+  }
+
+  @Get('leave/holidays')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
+  @ApiOperation({ summary: 'List public holidays (SUPER_ADMIN only)' })
+  listHolidays(@CurrentUser('tenantId') tenantId: string) {
+    return this.leaveSettings.listHolidays(tenantId);
+  }
+
+  @Post('leave/holidays')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
+  @ApiOperation({ summary: 'Create public holiday (SUPER_ADMIN only)' })
+  createHoliday(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() dto: CreateHolidayDto,
+  ) {
+    return this.leaveSettings.createHoliday(tenantId, dto);
+  }
+
+  @Delete('leave/holidays/:id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
+  @ApiOperation({ summary: 'Delete public holiday (SUPER_ADMIN only)' })
+  deleteHoliday(
+    @CurrentUser('tenantId') tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.leaveSettings.deleteHoliday(tenantId, id);
+  }
+
+  @Get('leave/balances')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
+  @ApiOperation({ summary: 'List users with leave balances (SUPER_ADMIN only)' })
+  @ApiQuery({ name: 'type', enum: ['ANNUAL', 'PERSONAL'] })
+  listLeaveBalances(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('type') type: 'ANNUAL' | 'PERSONAL',
+  ) {
+    return this.leaveBalances.listUserBalances(tenantId, type ?? 'ANNUAL');
+  }
+
+  @Put('leave/users/:userId/previous-leave')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
+  @ApiOperation({ summary: 'Set previous-year annual leave balance (SUPER_ADMIN only)' })
+  setPreviousLeave(
+    @CurrentUser('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+    @Body() dto: SetPreviousLeaveDto,
+  ) {
+    return this.leaveBalances.setPreviousLeave(tenantId, userId, dto.availableDays);
+  }
+
+  @Get('leave/users/:userId/annual-detail')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
+  @ApiOperation({ summary: 'Annual leave breakdown: previous + current (SUPER_ADMIN only)' })
+  getAnnualDetail(
+    @CurrentUser('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.leaveBalances.getAnnualDetail(tenantId, userId);
+  }
+
+  @Post('leave/adjustments')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'edit')
+  @ApiOperation({ summary: 'Manual leave balance adjustment (SUPER_ADMIN only)' })
+  createLeaveAdjustment(
+    @CurrentUser('tenantId') tenantId: string,
+    @CurrentUser('userId') userId: string,
+    @Body() dto: CreateLeaveAdjustmentDto,
+  ) {
+    return this.leaveBalances.createAdjustment(tenantId, userId, dto);
+  }
+
+  @Get('leave/users/:userId/history')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
+  @ApiOperation({ summary: 'Leave history for user (SUPER_ADMIN only)' })
+  getLeaveUserHistory(
+    @CurrentUser('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+    @Query('type') type: 'ANNUAL' | 'PERSONAL',
+    @Query('year') year?: string,
+  ) {
+    const y = year ? parseInt(year, 10) : new Date().getFullYear();
+    return this.leaveBalances.getUserHistory(tenantId, userId, type ?? 'ANNUAL', y);
+  }
+
+  @Get('leave/users/:userId/history/export')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @ApiOperation({ summary: 'Export leave history CSV (SUPER_ADMIN only)' })
+  async exportLeaveUserHistory(
+    @CurrentUser('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+    @Query('type') type: 'ANNUAL' | 'PERSONAL',
+    @Query('year') year: string | undefined,
+    @Res() res: Response,
+  ) {
+    const y = year ? parseInt(year, 10) : new Date().getFullYear();
+    const data = await this.leaveBalances.getUserHistory(
+      tenantId,
+      userId,
+      type ?? 'ANNUAL',
+      y,
+    );
+    const csv = this.leaveBalances.historyToCsv(data);
+    const name = (data.user.displayName ?? data.user.email).replace(/[^a-z0-9]/gi, '_');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="leave-${type ?? 'ANNUAL'}-${name}-${y}.csv"`,
+    );
+    res.send('\uFEFF' + csv);
+  }
+
   @Get('audit')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('settings', 'view')
   @ApiOperation({ summary: 'Get audit log (SUPER_ADMIN only)' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   getAudit(

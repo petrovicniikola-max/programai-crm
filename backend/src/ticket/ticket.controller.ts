@@ -15,8 +15,8 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TicketTagIdsDto } from './dto/ticket-tags.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../permissions/permissions.guard';
+import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('tickets')
@@ -32,8 +32,8 @@ export class TicketController {
   ) {}
 
   @Post('quick-call')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'SUPPORT', 'SALES')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('calls', 'edit')
   @ApiOperation({ summary: 'Quick Call / Outgoing Call – create CALL ticket; optional conversationKind (Quick) or contactMethod+contactsContactedCount (Outgoing)' })
   @ApiResponse({ status: 201, description: 'Returns ticket, contact, and company (or null).' })
   quickCall(
@@ -45,6 +45,8 @@ export class TicketController {
   }
 
   @Get('quick-call/client-lookup')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('calls', 'view')
   @ApiOperation({ summary: 'Lookup client (contact + company) by phone, contact name, company name, companyId, pib or mb for Quick Call autofill' })
   clientLookup(
     @CurrentUser('tenantId') tenantId: string,
@@ -66,6 +68,8 @@ export class TicketController {
   }
 
   @Post()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Create ticket' })
   create(
     @CurrentUser('tenantId') tenantId: string,
@@ -76,6 +80,8 @@ export class TicketController {
   }
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'view')
   @ApiOperation({ summary: 'List tickets with filters and pagination' })
   findAll(
     @CurrentUser('tenantId') tenantId: string,
@@ -85,12 +91,16 @@ export class TicketController {
   }
 
   @Get(':id/comments')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'view')
   @ApiOperation({ summary: 'List comments (sort createdAt asc)' })
   getComments(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.ticketCommentService.findAll(tenantId, id);
   }
 
   @Post(':id/comments')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Add comment (authorId from JWT)' })
   @ApiResponse({ status: 201, description: 'Created comment' })
   addComment(
@@ -103,12 +113,16 @@ export class TicketController {
   }
 
   @Get(':id/tasks')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'view')
   @ApiOperation({ summary: 'List tasks (sort orderNo asc)' })
   getTasks(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.ticketTaskService.findAll(tenantId, id);
   }
 
   @Post(':id/tasks')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Add task' })
   @ApiResponse({ status: 201, description: 'Created task' })
   addTask(
@@ -120,6 +134,8 @@ export class TicketController {
   }
 
   @Patch(':id/tasks/:taskId')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Update task (title, isDone, orderNo)' })
   updateTask(
     @CurrentUser('tenantId') tenantId: string,
@@ -131,6 +147,8 @@ export class TicketController {
   }
 
   @Delete(':id/tasks/:taskId')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Delete task' })
   deleteTask(
     @CurrentUser('tenantId') tenantId: string,
@@ -141,6 +159,8 @@ export class TicketController {
   }
 
   @Post(':id/tags')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Assign tags to ticket (duplicates ignored)' })
   assignTags(
     @CurrentUser('tenantId') tenantId: string,
@@ -151,6 +171,8 @@ export class TicketController {
   }
 
   @Delete(':id/tags')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Unassign tags from ticket' })
   unassignTags(
     @CurrentUser('tenantId') tenantId: string,
@@ -161,12 +183,16 @@ export class TicketController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'view')
   @ApiOperation({ summary: 'Get ticket by id (with commentsCount, openTasksCount, tags)' })
   findOne(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.ticketService.findOne(tenantId, id);
   }
 
   @Patch(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Update ticket' })
   update(
     @CurrentUser('tenantId') tenantId: string,
@@ -177,6 +203,8 @@ export class TicketController {
   }
 
   @Patch(':id/status')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Update ticket status' })
   updateStatus(
     @CurrentUser('tenantId') tenantId: string,
@@ -187,6 +215,8 @@ export class TicketController {
   }
 
   @Patch(':id/assign-to-me')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Assign ticket to current user' })
   assignToMe(
     @CurrentUser('tenantId') tenantId: string,
@@ -197,6 +227,8 @@ export class TicketController {
   }
 
   @Patch(':id/call-time/now')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Set call occurred time to now (button NOW)' })
   @ApiResponse({ status: 200, description: 'Ticket with callOccurredAt set to current time.' })
   setCallTimeNow(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
@@ -204,6 +236,8 @@ export class TicketController {
   }
 
   @Delete(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('tickets', 'edit')
   @ApiOperation({ summary: 'Delete ticket' })
   remove(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.ticketService.remove(tenantId, id);

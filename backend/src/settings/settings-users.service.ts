@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { UserRole } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SetUserPasswordDto } from './dto/set-user-password.dto';
 import { AuditLogService } from './audit-log.service';
+import { parseDateOnly } from '../leave/leave-date.util';
 
 @Injectable()
 export class SettingsUsersService {
@@ -12,6 +14,23 @@ export class SettingsUsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
   ) {}
+
+  private async resolveRoleFields(input: { role?: UserRole; roleId?: string }) {
+    if (input.roleId) {
+      const assigned = await this.prisma.role.findUnique({ where: { id: input.roleId } });
+      if (!assigned) throw new NotFoundException('Uloga nije pronađena.');
+      if (!assigned.isActive) throw new BadRequestException('Uloga nije aktivna.');
+      const enumVal = Object.values(UserRole).includes(assigned.slug as UserRole)
+        ? (assigned.slug as UserRole)
+        : UserRole.USER;
+      return { roleId: assigned.id, role: enumVal };
+    }
+    if (input.role) {
+      const assigned = await this.prisma.role.findUnique({ where: { slug: input.role } });
+      return { role: input.role, roleId: assigned?.id ?? null };
+    }
+    return null;
+  }
 
   async findAll(tenantId: string) {
     return this.prisma.user.findMany({
@@ -21,9 +40,16 @@ export class SettingsUsersService {
         email: true,
         displayName: true,
         role: true,
+        roleId: true,
         isActive: true,
         createdAt: true,
         receiveLicenceExpiryEmails: true,
+        employmentDate: true,
+        leaveApproverId: true,
+        jobTitle: true,
+        employmentContractType: true,
+        contractEndDate: true,
+        totalWorkExperienceYears: true,
       },
       orderBy: { email: 'asc' },
     });
@@ -31,7 +57,9 @@ export class SettingsUsersService {
 
   async create(tenantId: string, actorUserId: string, dto: CreateUserDto) {
     const email = dto.email.trim().toLowerCase();
-    if (dto.role === 'USER' && !dto.companyId?.trim()) {
+    const roleFields = await this.resolveRoleFields({ role: dto.role, roleId: dto.roleId });
+    if (!roleFields) throw new BadRequestException('role ili roleId je obavezan.');
+    if (roleFields.role === 'USER' && !dto.companyId?.trim()) {
       throw new BadRequestException('companyId is required when role is USER');
     }
     const existing = await this.prisma.user.findUnique({
@@ -45,7 +73,8 @@ export class SettingsUsersService {
         email,
         displayName: dto.displayName?.trim() || null,
         passwordHash,
-        role: dto.role,
+        role: roleFields.role,
+        roleId: roleFields.roleId,
         companyId: dto.companyId?.trim() || null,
         receiveLicenceExpiryEmails: dto.receiveLicenceExpiryEmails ?? false,
       },
@@ -54,6 +83,7 @@ export class SettingsUsersService {
         email: true,
         displayName: true,
         role: true,
+        roleId: true,
         companyId: true,
         isActive: true,
         createdAt: true,
@@ -76,10 +106,26 @@ export class SettingsUsersService {
     if (!user) throw new NotFoundException('User not found');
     const data: Record<string, unknown> = {};
     if (dto.displayName !== undefined) data.displayName = dto.displayName;
-    if (dto.role !== undefined) data.role = dto.role;
+    const roleFields = await this.resolveRoleFields({ role: dto.role, roleId: dto.roleId });
+    if (roleFields) {
+      data.role = roleFields.role;
+      data.roleId = roleFields.roleId;
+    }
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.receiveLicenceExpiryEmails !== undefined)
       data.receiveLicenceExpiryEmails = dto.receiveLicenceExpiryEmails;
+    if (dto.employmentDate !== undefined) {
+      data.employmentDate = dto.employmentDate ? parseDateOnly(dto.employmentDate) : null;
+    }
+    if (dto.leaveApproverId !== undefined) data.leaveApproverId = dto.leaveApproverId;
+    if (dto.jobTitle !== undefined) data.jobTitle = dto.jobTitle;
+    if (dto.employmentContractType !== undefined)
+      data.employmentContractType = dto.employmentContractType;
+    if (dto.contractEndDate !== undefined) {
+      data.contractEndDate = dto.contractEndDate ? parseDateOnly(dto.contractEndDate) : null;
+    }
+    if (dto.totalWorkExperienceYears !== undefined)
+      data.totalWorkExperienceYears = dto.totalWorkExperienceYears;
     const updated = await this.prisma.user.update({
       where: { id },
       data: data as object,
@@ -88,9 +134,16 @@ export class SettingsUsersService {
         email: true,
         displayName: true,
         role: true,
+        roleId: true,
         isActive: true,
         createdAt: true,
         receiveLicenceExpiryEmails: true,
+        employmentDate: true,
+        leaveApproverId: true,
+        jobTitle: true,
+        employmentContractType: true,
+        contractEndDate: true,
+        totalWorkExperienceYears: true,
       },
     });
     await this.audit.log({

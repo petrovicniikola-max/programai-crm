@@ -8,6 +8,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
+import { PermissionsModule } from './permissions/permissions.module';
 import { AuthModule } from './auth/auth.module';
 import { TenantModule } from './tenant/tenant.module';
 import { CompanyModule } from './company/company.module';
@@ -23,6 +24,13 @@ import { PlatformModule } from './platform/platform.module';
 import { PublicModule } from './public/public.module';
 import { ReportsModule } from './reports/reports.module';
 import { SalesImportModule } from './sales-import/sales-import.module';
+import { SalesDistributorEmailsModule } from './sales-distributor-emails/sales-distributor-emails.module';
+import { ReportsAiModule } from './reports-ai/reports-ai.module';
+import { ProjectsModule } from './projects/projects.module';
+import { LeaveModule } from './leave/leave.module';
+import { AccountantTodoModule } from './accountant-todo/accountant-todo.module';
+import { TravelOrdersModule } from './travel-orders/travel-orders.module';
+import { SoldDevicesModule } from './sold-devices/sold-devices.module';
 
 const redisEnabled = process.env.REDIS_ENABLED === 'true';
 
@@ -50,6 +58,7 @@ const redisEnabled = process.env.REDIS_ENABLED === 'true';
         ]
       : []),
     PrismaModule,
+    PermissionsModule,
     AuthModule,
     TenantModule,
     CompanyModule,
@@ -65,6 +74,13 @@ const redisEnabled = process.env.REDIS_ENABLED === 'true';
     PublicModule,
     ReportsModule,
     SalesImportModule,
+    SalesDistributorEmailsModule,
+    ReportsAiModule,
+    ProjectsModule,
+    LeaveModule,
+    AccountantTodoModule,
+    TravelOrdersModule,
+    SoldDevicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -41,8 +41,6 @@ export class SalesImportController {
     @Query('limit') limit?: string,
     @Query('filterField') filterField?: string,
     @Query('filterValue') filterValue?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('sortOrder') sortOrder?: string,
   ) {
     return this.salesImportService.list(
       tenantId,
@@ -50,8 +48,6 @@ export class SalesImportController {
       Number(limit) || 50,
       filterField,
       filterValue,
-      sortBy,
-      sortOrder,
     );
   }
 
@@ -98,8 +94,6 @@ export class SalesImportController {
     @Query('format') format: 'csv' | 'xlsx' = 'csv',
     @Query('contactDateFrom') contactDateFrom?: string,
     @Query('contactDateTo') contactDateTo?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('sortOrder') sortOrder?: string,
   ) {
     const safeFormat = format === 'xlsx' ? 'xlsx' : 'csv';
     const data = await this.salesImportService.exportRows(
@@ -107,8 +101,6 @@ export class SalesImportController {
       safeFormat,
       contactDateFrom,
       contactDateTo,
-      sortBy,
-      sortOrder,
     );
     const date = new Date().toISOString().slice(0, 10);
     const filename = `prodaja_mails_pozivi_${date}.${safeFormat}`;

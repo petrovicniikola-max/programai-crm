@@ -5,12 +5,22 @@ import { AuditLogService } from '../settings/audit-log.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { ListDevicesQueryDto } from './dto/list-devices-query.dto';
+import { DistributorService } from '../distributor/distributor.service';
+
+function computeSubDistributorName(distributorName?: string | null): string | null {
+  const n = (distributorName ?? '').trim();
+  const idx = n.indexOf('/');
+  if (idx === -1) return null;
+  const sub = n.slice(idx + 1).trim();
+  return sub || null;
+}
 
 @Injectable()
 export class DeviceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly distributors: DistributorService,
   ) {}
 
   async create(tenantId: string, userId: string, dto: CreateDeviceDto) {
@@ -21,11 +31,22 @@ export class DeviceService {
       });
       if (existing) throw new ConflictException('Device with this serial number already exists');
     }
+    let subDistributorName =
+      dto.subDistributorName !== undefined ? (dto.subDistributorName?.trim() || null) : null;
+    if (!subDistributorName && dto.distributorId) {
+      const dist = await this.prisma.distributor.findFirst({
+        where: { id: dto.distributorId, tenantId },
+        select: { name: true },
+      });
+      subDistributorName = computeSubDistributorName(dist?.name ?? null);
+    }
+
     const device = await this.prisma.device.create({
       data: {
         tenantId,
         companyId: dto.companyId || null,
         distributorId: dto.distributorId || null,
+        subDistributorName,
         name: dto.name?.trim() || null,
         model: dto.model?.trim() || null,
         serialNo,
@@ -58,7 +79,7 @@ export class DeviceService {
       tenantId: string;
       id?: { in: string[] };
       companyId?: string;
-      distributorId?: string;
+      distributorId?: string | { in: string[] };
       status?: DeviceStatus;
       OR?: Array<Record<string, unknown>>;
       createdAt?: { gte?: Date; lte?: Date };
@@ -67,7 +88,14 @@ export class DeviceService {
       where.id = { in: query.ids };
     }
     if (query.companyId) where.companyId = query.companyId;
-    if (query.distributorId) where.distributorId = query.distributorId;
+    if (query.distributorId) {
+      const resolved = await this.distributors.resolveDistributorIdsForDeviceFilter(
+        tenantId,
+        query.distributorId,
+      );
+      where.distributorId =
+        resolved.distributorIds.length > 1 ? { in: resolved.distributorIds } : query.distributorId;
+    }
     if (query.status) where.status = query.status as DeviceStatus;
     const search = query.search?.trim();
     if (search) {
@@ -116,6 +144,20 @@ export class DeviceService {
     const data: Record<string, unknown> = {};
     if (dto.companyId !== undefined) data.companyId = dto.companyId || null;
     if (dto.distributorId !== undefined) data.distributorId = dto.distributorId || null;
+    if (dto.subDistributorName !== undefined) {
+      data.subDistributorName = dto.subDistributorName?.trim() || null;
+    } else if (dto.distributorId !== undefined) {
+      // distributor changed but sub-distributor not explicitly set -> recompute from distributor name
+      if (dto.distributorId) {
+        const dist = await this.prisma.distributor.findFirst({
+          where: { id: dto.distributorId, tenantId },
+          select: { name: true },
+        });
+        data.subDistributorName = computeSubDistributorName(dist?.name ?? null);
+      } else {
+        data.subDistributorName = null;
+      }
+    }
     if (dto.name !== undefined) data.name = dto.name?.trim() || null;
     if (dto.model !== undefined) data.model = dto.model?.trim() || null;
     if (dto.serialNo !== undefined) data.serialNo = serialNo ?? undefined;

@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { SettingsModule } from '../settings/settings.module';
+import { PermissionsModule } from '../permissions/permissions.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SettingsModule } from '../settings/settings.module';
       inject: [ConfigService],
     }),
     SettingsModule,
+    PermissionsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

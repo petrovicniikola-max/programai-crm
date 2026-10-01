@@ -11,6 +11,8 @@ import { ExecuteReportDto } from './dto/execute-report.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { PermissionsGuard } from '../permissions/permissions.guard';
+import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -25,12 +27,24 @@ export class ReportsController {
   ) {}
 
   @Get('overview')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports.overview', 'view')
   @ApiOperation({ summary: 'Reports overview – aggregated counts for dashboard' })
   getOverview(@CurrentUser('tenantId') tenantId: string) {
     return this.reportsService.getOverview(tenantId);
   }
 
+  @Get('admin-dashboard')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Admin kontrolna tabla – agregirani pregled (SUPER_ADMIN)' })
+  getAdminDashboard(@CurrentUser('tenantId') tenantId: string) {
+    return this.reportsService.getAdminDashboard(tenantId);
+  }
+
   @Get('tickets')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports.tickets', 'view')
   @ApiOperation({ summary: 'List tickets for reports (same as GET /tickets)' })
   getTickets(
     @CurrentUser('tenantId') tenantId: string,
@@ -40,6 +54,8 @@ export class ReportsController {
   }
 
   @Get('tickets/export')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports.tickets', 'edit')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @ApiOperation({ summary: 'Export tickets as CSV (respects filters)' })
   async exportTicketsCsv(
@@ -54,6 +70,8 @@ export class ReportsController {
   }
 
   @Get('sales/export')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('sales', 'view')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @ApiOperation({ summary: 'Export Prodaja (Outgoing Call) tickets as CSV' })
   async exportSalesCsv(
@@ -68,6 +86,8 @@ export class ReportsController {
   }
 
   @Get('tables/export')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports.tables', 'edit')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @ApiOperation({ summary: 'Export form/table responses as CSV' })
   @ApiQuery({ name: 'formId', required: true, description: 'Form ID' })
@@ -86,17 +106,17 @@ export class ReportsController {
   }
 
   @Get('alerts/config')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
-  @ApiOperation({ summary: 'Get alerts & scheduled report config (SUPER_ADMIN)' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports.alerts', 'view')
+  @ApiOperation({ summary: 'Get alerts & scheduled report config' })
   getAlertsConfig(@CurrentUser('tenantId') tenantId: string) {
     return this.reportsService.getAlertsConfig(tenantId);
   }
 
   @Patch('alerts/config')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
-  @ApiOperation({ summary: 'Update scheduled report config (SUPER_ADMIN)' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports.alerts', 'edit')
+  @ApiOperation({ summary: 'Update scheduled report config' })
   patchAlertsConfig(
     @CurrentUser('tenantId') tenantId: string,
     @Body() dto: PatchAlertsConfigDto,
@@ -105,9 +125,9 @@ export class ReportsController {
   }
 
   @Post('alerts/execute')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
-  @ApiOperation({ summary: 'Execute report: executeAll=true runs per-email configs; otherwise single report to saved emails (SUPER_ADMIN)' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('reports.alerts', 'edit')
+  @ApiOperation({ summary: 'Execute report: executeAll=true runs per-email configs; otherwise single report to saved emails' })
   executeReport(
     @CurrentUser('tenantId') tenantId: string,
     @Body() dto: ExecuteReportDto,

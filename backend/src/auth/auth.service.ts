@@ -5,11 +5,13 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../settings/audit-log.service';
+import { PermissionsService } from '../permissions/permissions.service';
 
 export interface JwtPayload {
   sub: string;
   tenantId: string | null;
   role: string;
+  roleId?: string | null;
   email: string;
   displayName?: string;
   isPlatformAdmin?: boolean;
@@ -40,6 +42,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly audit: AuditLogService,
+    private readonly permissions: PermissionsService,
   ) {}
 
   async validateUser(
@@ -289,10 +292,37 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, displayName: true, role: true, tenantId: true, isPlatformAdmin: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        jobTitle: true,
+        role: true,
+        roleId: true,
+        tenantId: true,
+        isPlatformAdmin: true,
+        createdAt: true,
+        assignedRole: { select: { id: true, slug: true, name: true, permissionsVersion: true } },
+      },
     });
     if (!user) throw new UnauthorizedException('User not found');
-    return user;
+    const permCtx = await this.permissions.getPermissionsForUser(userId);
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      jobTitle: user.jobTitle,
+      role: permCtx.roleSlug ?? user.role,
+      roleId: permCtx.roleId ?? user.roleId,
+      roleName: user.assignedRole?.name,
+      tenantId: user.tenantId,
+      isPlatformAdmin: user.isPlatformAdmin,
+      createdAt: user.createdAt,
+      permissions: permCtx.permissions,
+      permissionsVersion: permCtx.permissionsVersion,
+    };
   }
 
   async getTenantUsers(tenantId: string) {
@@ -301,5 +331,56 @@ export class AuthService {
       select: { id: true, email: true, displayName: true },
       orderBy: { displayName: 'asc' },
     });
+  }
+
+  async getDashboardLayout(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { dashboardLayout: true },
+    });
+    return { layout: (user?.dashboardLayout as unknown) ?? null };
+  }
+
+  async setDashboardLayout(userId: string, layout: unknown) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { dashboardLayout: (layout ?? null) as never },
+    });
+    return { layout: layout ?? null };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    meta?: { ip?: string; userAgent?: string },
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.isActive) throw new UnauthorizedException('User not found');
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) throw new BadRequestException('Trenutna lozinka nije ispravna');
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('Nova lozinka mora biti drugačija od trenutne');
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    await this.audit.log({
+      tenantId: user.tenantId ?? undefined,
+      actorUserId: userId,
+      action: 'PASSWORD_CHANGE',
+      entityType: 'User',
+      entityId: userId,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+    return { ok: true };
+  }
+
+  async setAvatar(userId: string, avatarUrl: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+    });
+    return { avatarUrl };
   }
 }

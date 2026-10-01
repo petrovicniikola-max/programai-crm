@@ -25,8 +25,8 @@ import { RenewLicenceDto } from './dto/renew-licence.dto';
 import { ListLicencesQueryDto } from './dto/list-licences-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../permissions/permissions.guard';
+import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('licences')
@@ -40,8 +40,8 @@ export class LicenceController {
   ) {}
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'edit')
   @ApiOperation({ summary: 'Create licence' })
   create(
     @CurrentUser('tenantId') tenantId: string,
@@ -52,12 +52,16 @@ export class LicenceController {
   }
 
   @Get()
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'view')
   @ApiOperation({ summary: 'List licences' })
   findAll(@CurrentUser('tenantId') tenantId: string, @Query() query: ListLicencesQueryDto) {
     return this.licenceService.findAll(tenantId, query);
   }
 
   @Get('expiring-soon')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'view')
   @ApiOperation({ summary: 'Licences expiring in the next N days' })
   @ApiQuery({ name: 'days', required: false, type: Number })
   expiringSoon(
@@ -69,16 +73,16 @@ export class LicenceController {
   }
 
   @Post('alerts/run-now')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'edit')
   @ApiOperation({ summary: 'Manually trigger licence expiry alert scan (SUPER_ADMIN)' })
   runAlertsNow(@CurrentUser('tenantId') tenantId: string, @CurrentUser('userId') userId: string) {
     return this.alertsService.runNow(userId);
   }
 
   @Get('alerts/logs')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'view')
   @ApiOperation({ summary: 'List licence notification logs (SUPER_ADMIN)' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'offset', required: false, type: Number })
@@ -93,8 +97,8 @@ export class LicenceController {
   }
 
   @Get('export')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'view')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @ApiOperation({ summary: 'Export licences as CSV' })
   @ApiQuery({ name: 'format', required: false, enum: ['csv'] })
@@ -110,8 +114,8 @@ export class LicenceController {
   }
 
   @Get('import/template')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'view')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @ApiOperation({ summary: 'Download sample CSV for licence import' })
   getImportTemplate(@Res() res: Response) {
@@ -121,14 +125,16 @@ export class LicenceController {
   }
 
   @Get('stats')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'view')
   @ApiOperation({ summary: 'Licence stats for dashboard' })
   stats(@CurrentUser('tenantId') tenantId: string) {
     return this.licenceService.stats(tenantId);
   }
 
   @Post('import')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'edit')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -148,14 +154,16 @@ export class LicenceController {
   }
 
   @Get(':id')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'view')
   @ApiOperation({ summary: 'Get licence by id' })
   findOne(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.licenceService.findOne(tenantId, id);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'edit')
   @ApiOperation({ summary: 'Update licence' })
   update(
     @CurrentUser('tenantId') tenantId: string,
@@ -167,8 +175,8 @@ export class LicenceController {
   }
 
   @Post(':id/renew')
-  @UseGuards(RolesGuard)
-  @Roles('SUPER_ADMIN', 'SUPPORT')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('licences', 'edit')
   @ApiOperation({ summary: 'Renew licence (set validTo + RENEWED event)' })
   renew(
     @CurrentUser('tenantId') tenantId: string,

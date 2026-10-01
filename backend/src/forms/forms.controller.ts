@@ -15,8 +15,8 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../auth/guards/tenant.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../permissions/permissions.guard';
+import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FormsService } from './forms.service';
 import { CreateFormDto } from './dto/create-form.dto';
@@ -33,9 +33,6 @@ import { PivotQueryDto } from './dto/pivot-query.dto';
 import { SendFormLinkDto } from './dto/send-form-link.dto';
 import { FormShareService } from './form-share.service';
 
-const ROLES_WRITE = ['SUPER_ADMIN', 'SALES'];
-const ROLES_READ = ['SUPER_ADMIN', 'SALES', 'SUPPORT'];
-
 @ApiTags('forms')
 @Controller('forms')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -47,8 +44,8 @@ export class FormsController {
   ) {}
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Create form (SUPER_ADMIN, SALES)' })
   create(
     @CurrentUser('tenantId') tenantId: string,
@@ -59,16 +56,16 @@ export class FormsController {
   }
 
   @Get()
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_READ)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'view')
   @ApiOperation({ summary: 'List forms (SUPER_ADMIN, SALES, SUPPORT)' })
   findAll(@CurrentUser('tenantId') tenantId: string, @Query() query: FormsListQueryDto) {
     return this.forms.findAll(tenantId, query);
   }
 
   @Get(':id/responses/pivot')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_READ)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'view')
   @ApiOperation({ summary: 'Responses table/pivot: questions as rows, submissions as columns' })
   getPivot(
     @CurrentUser('tenantId') tenantId: string,
@@ -79,8 +76,8 @@ export class FormsController {
   }
 
   @Get(':id/responses.csv')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_READ)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'view')
   @Header('Content-Type', 'text/csv')
   @ApiOperation({ summary: 'Export responses as CSV (table-like)' })
   async getResponsesCsv(
@@ -94,8 +91,8 @@ export class FormsController {
   }
 
   @Get(':id/submissions')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_READ)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'view')
   @ApiOperation({ summary: 'List submissions for form' })
   getSubmissions(
     @CurrentUser('tenantId') tenantId: string,
@@ -106,8 +103,8 @@ export class FormsController {
   }
 
   @Post(':id/submissions')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Submit form (internal)' })
   @ApiResponse({ status: 201 })
   submit(
@@ -120,8 +117,8 @@ export class FormsController {
   }
 
   @Post(':id/questions/reorder')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Reorder questions' })
   reorderQuestions(
     @CurrentUser('tenantId') tenantId: string,
@@ -132,8 +129,8 @@ export class FormsController {
   }
 
   @Post(':id/questions')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Add question' })
   @ApiResponse({ status: 201 })
   createQuestion(
@@ -145,8 +142,8 @@ export class FormsController {
   }
 
   @Patch(':id/questions/:questionId')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Update question' })
   updateQuestion(
     @CurrentUser('tenantId') tenantId: string,
@@ -158,8 +155,8 @@ export class FormsController {
   }
 
   @Delete(':id/questions/:questionId')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Archive question (soft delete)' })
   archiveQuestion(
     @CurrentUser('tenantId') tenantId: string,
@@ -170,8 +167,8 @@ export class FormsController {
   }
 
   @Post(':id/questions/:questionId/options')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Add option to choice question' })
   @ApiResponse({ status: 201 })
   createOption(
@@ -184,8 +181,8 @@ export class FormsController {
   }
 
   @Patch(':id/questions/:questionId/options/:optionId')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Update option' })
   updateOption(
     @CurrentUser('tenantId') tenantId: string,
@@ -198,8 +195,8 @@ export class FormsController {
   }
 
   @Delete(':id/questions/:questionId/options/:optionId')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Delete option' })
   deleteOption(
     @CurrentUser('tenantId') tenantId: string,
@@ -211,16 +208,16 @@ export class FormsController {
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_READ)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'view')
   @ApiOperation({ summary: 'Get form by id with questions' })
   findOne(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.forms.findOne(tenantId, id);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Update form' })
   update(
     @CurrentUser('tenantId') tenantId: string,
@@ -231,24 +228,24 @@ export class FormsController {
   }
 
   @Post(':id/publish')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Publish form' })
   publish(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.forms.publish(tenantId, id);
   }
 
   @Post(':id/unpublish')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Unpublish form' })
   unpublish(@CurrentUser('tenantId') tenantId: string, @Param('id') id: string) {
     return this.forms.unpublish(tenantId, id);
   }
 
   @Post(':id/clone')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Clone form (new DRAFT)' })
   @ApiResponse({ status: 201 })
   clone(
@@ -260,8 +257,8 @@ export class FormsController {
   }
 
   @Post(':id/send-link')
-  @UseGuards(RolesGuard)
-  @Roles(...ROLES_WRITE)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('forms', 'edit')
   @ApiOperation({ summary: 'Send form link by email. When SMTP not configured, uses Ethereal test inbox; response may include previewUrl.' })
   @ApiResponse({ status: 200 })
   async sendFormLink(

@@ -15,7 +15,14 @@ export class DistributorController {
   @Get()
   @ApiOperation({ summary: 'List distributors with device counts' })
   @ApiQuery({ name: 'search', required: false })
-  findAll(@CurrentUser('tenantId') tenantId: string, @Query('search') search?: string) {
+  @ApiQuery({ name: 'kind', required: false, enum: ['all', 'main', 'sub'] })
+  findAll(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('search') search?: string,
+    @Query('kind') kind: 'all' | 'main' | 'sub' = 'all',
+  ) {
+    if (kind === 'main') return this.distributorService.findMainDistributors(tenantId, search);
+    if (kind === 'sub') return this.distributorService.findSubDistributors(tenantId, search);
     return this.distributorService.findAll(tenantId, search);
   }
 

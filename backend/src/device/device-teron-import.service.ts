@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { DistributorService } from '../distributor/distributor.service';
 
-export const TERON_IMPORT_MAX_ROWS = 25000;
+export const TERON_IMPORT_MAX_ROWS = 50000;
 
 export interface TeronImportResult {
   created: number;
