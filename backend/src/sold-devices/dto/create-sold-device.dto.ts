@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export const SOLD_DEVICE_MONTHS = [3, 6, 12, 24] as const;
 
@@ -28,6 +28,14 @@ export class CreateSoldDeviceDto {
   @IsInt()
   @IsIn(SOLD_DEVICE_MONTHS)
   months!: number;
+
+  @ApiPropertyOptional({ example: 1500, description: 'Cena nove licence u dinarima (bonus za jedan mesec)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Cena mora biti pozitivan ceo broj.' })
+  @Min(1, { message: 'Cena mora biti pozitivan ceo broj.' })
+  @Max(100_000_000, { message: 'Cena mora biti pozitivan ceo broj.' })
+  bonusAmount?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

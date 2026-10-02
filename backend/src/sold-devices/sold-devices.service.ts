@@ -9,10 +9,11 @@ const BONUS_BY_LICENCE: Record<string, number> = {
   'android phone/tablet': 1200,
   android: 1200,
   'fiscal box': 2400,
+  tps900: 1200,
 };
 
-function bonusForLicence(licenceName: string): number {
-  return BONUS_BY_LICENCE[licenceName.trim().toLowerCase()] ?? 0;
+function mappedBonus(licenceName: string): number | undefined {
+  return BONUS_BY_LICENCE[licenceName.trim().toLowerCase()];
 }
 
 @Injectable()
@@ -58,6 +59,8 @@ export class SoldDevicesService {
     });
     if (existing) throw new BadRequestException('Uređaj sa ovim SN već postoji.');
 
+    const bonusAmount = await this.resolveBonus(tenantId, licenceName, dto.bonusAmount, 'create');
+
     const row = await this.prisma.soldDevice.create({
       data: {
         tenantId,
@@ -66,7 +69,7 @@ export class SoldDevicesService {
         name,
         licenceName,
         months: dto.months,
-        bonusAmount: bonusForLicence(licenceName),
+        bonusAmount,
         description,
       },
       include: { user: { select: { displayName: true, email: true } } },
@@ -102,12 +105,49 @@ export class SoldDevicesService {
     });
     if (existing) throw new BadRequestException('Uređaj sa ovim SN već postoji.');
 
+    const bonusAmount = await this.resolveBonus(tenantId, licenceName, dto.bonusAmount, 'update');
+
     const row = await this.prisma.soldDevice.update({
       where: { id },
-      data: { serialNo, name, licenceName, months: dto.months, bonusAmount: bonusForLicence(licenceName), description },
+      data: { serialNo, name, licenceName, months: dto.months, bonusAmount, description },
       include: { user: { select: { displayName: true, email: true } } },
     });
     return this.toRow(row);
+  }
+
+  private async resolveBonus(
+    tenantId: string,
+    licenceName: string,
+    explicit: number | undefined,
+    mode: 'create' | 'update',
+  ): Promise<number> {
+    const mapped = mappedBonus(licenceName);
+    if (mapped !== undefined) return mapped;
+
+    const stored = await this.latestCustomBonus(tenantId, licenceName);
+    const price = explicit !== undefined && Number.isInteger(explicit) && explicit >= 1 ? explicit : undefined;
+
+    if (mode === 'create') {
+      if (stored !== null) return stored;
+      if (price === undefined) throw new BadRequestException('Unesite cenu nove licence.');
+      return price;
+    }
+
+    if (price !== undefined) return price;
+    if (stored !== null) return stored;
+    throw new BadRequestException('Unesite cenu nove licence.');
+  }
+
+  private async latestCustomBonus(tenantId: string, licenceName: string): Promise<number | null> {
+    const row = await this.prisma.soldDevice.findFirst({
+      where: {
+        tenantId,
+        licenceName: { equals: licenceName.trim(), mode: 'insensitive' },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { bonusAmount: true },
+    });
+    return row?.bonusAmount ?? null;
   }
 
   private toRow(row: {
